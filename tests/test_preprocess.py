@@ -217,7 +217,9 @@ def test_s1_to_s7_do_not_split_vietnamese_phrase() -> None:
         assert doc["text_clean"] == phrase, transform.name
 
 
-def test_token_quality_metrics_warn_above_ten_percent(caplog: pytest.LogCaptureFixture) -> None:
+def test_token_quality_metrics_warn_above_ten_percent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     caplog.set_level(logging.WARNING, logger="fbpipe.preprocess.pipeline")
     metrics = _token_quality_metrics(
         [{"tokens": ["a", "v", "người", "thông_tin"]}]
@@ -236,7 +238,10 @@ def test_token_quality_metrics_does_not_warn_at_ten_percent(
 ) -> None:
     caplog.set_level(logging.WARNING, logger="fbpipe.preprocess.pipeline")
     metrics = _token_quality_metrics(
-        [{"tokens": ["a", "người", "thông", "tin", "chia", "sẻ", "về", "mọi", "người", "việt"]}]
+        [{"tokens": [
+            "a", "người", "thông", "tin", "chia",
+            "sẻ", "về", "mọi", "người", "việt",
+        ]}]
     )
 
     assert metrics["single_character_token_ratio"] == 0.1
