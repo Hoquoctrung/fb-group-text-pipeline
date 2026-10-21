@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -689,6 +692,92 @@ def bench_storage_command(
         f"({iterations} iterations) -> {output_path}; "
         f"SQLite FTS5 + Parquet. Clones are marked in metrics."
     )
+
+
+
+_DEMO_STEPS: tuple[tuple[str, ...], ...] = (
+    ("synth", "--n", "200"),
+    ("preprocess", "--force"),
+    ("represent", "--skip-e5", "--force"),
+    ("label-eval",),
+    ("store", "--force"),
+    ("analyze",),
+    ("viz",),
+    ("report",),
+)
+
+
+def _print_demo_top_terms(metrics_path: Path, *, limit: int = 15) -> None:
+    """Print top terms used by F06 from the most recent analysis metrics."""
+    try:
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"Cannot read F06 term metrics from {metrics_path}: {exc}"
+        ) from exc
+
+    for key, title, score_key in (
+        ("top_tf_terms", "F06 — top 15 TF tokens", "count"),
+        ("top_tfidf_terms", "F06 — top 15 TF-IDF tokens", "mean_tfidf"),
+    ):
+        rows = metrics.get(key, [])
+        typer.echo(f"\n{title}")
+        if not isinstance(rows, list) or not rows:
+            typer.echo("  (không có token)")
+            continue
+        for rank, row in enumerate(rows[:limit], start=1):
+            term = str(row.get("term", "?"))
+            score = row.get(score_key, 0)
+            typer.echo(f"  {rank:>2}. {term}: {score}")
+
+
+@app.command("demo")
+def demo_command() -> None:
+    """Run the offline 200-post synthetic pipeline and print elapsed times."""
+    configure_logging()
+    started = time.perf_counter()
+    typer.echo("fbpipe demo: 200 synthetic posts; E5 skipped; no live crawling.")
+    for args in _DEMO_STEPS:
+        stage_started = time.perf_counter()
+        elapsed = stage_started - started
+        remaining = 90.0 - elapsed
+        if remaining <= 0:
+            typer.echo("Demo exceeded its 90-second time budget.", err=True)
+            raise typer.Exit(code=124)
+        typer.echo(f"\n[demo] fbpipe {' '.join(args)}")
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "fbpipe.cli", *args],
+                check=True,
+                timeout=remaining,
+            )
+        except subprocess.TimeoutExpired as exc:
+            typer.echo(
+                "Demo exceeded its 90-second time budget while running "
+                f"fbpipe {' '.join(args)}.",
+                err=True,
+            )
+            raise typer.Exit(code=124) from exc
+        except subprocess.CalledProcessError as exc:
+            typer.echo(
+                f"Demo stage failed: fbpipe {' '.join(args)} "
+                f"(exit={exc.returncode}).",
+                err=True,
+            )
+            raise typer.Exit(code=exc.returncode or 1) from exc
+        typer.echo(f"[demo] step elapsed: {time.perf_counter() - stage_started:.2f}s")
+
+    try:
+        _print_demo_top_terms(Path("data/metrics/analyze.json"))
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=5) from exc
+
+    total_seconds = time.perf_counter() - started
+    typer.echo(f"\nDemo completed in {total_seconds:.2f}s (target: under 90s).")
+    if total_seconds >= 90:
+        typer.echo("Demo exceeded its 90-second time budget.", err=True)
+        raise typer.Exit(code=124)
 
 
 @app.command("validate")
