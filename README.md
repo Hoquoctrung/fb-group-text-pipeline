@@ -39,7 +39,7 @@ cp .env.example .env
 make demo
 ~~~
 
-*make demo* gọi *fbpipe demo*: tạo lại 200 bản ghi synthetic, rồi chạy *preprocess --force* → *represent --skip-e5* → *label-eval* → *store* → *analyze* → *viz* → *report*. Lệnh in thời gian từng bước, tổng thời gian và 15 token TF/TF-IDF của F06. Mục tiêu là hoàn thành dưới 90 giây; nếu vượt giới hạn, lệnh báo lỗi.
+*make demo* gọi *fbpipe demo*: tạo 200 bản ghi synthetic trong thư mục riêng *data/demo*, rồi chạy *preprocess --force* → *represent --skip-e5* → *label-eval* → *store* → *analyze* → *viz* → *report*. Demo chỉ xóa/tạo lại *data/demo* nên không xóa file import khác hay nhãn của bạn ở các thư mục khác. Metrics nằm tại *data/demo/metrics/*. Lệnh in thời gian từng bước, tổng thời gian và 15 token TF/TF-IDF của F06. Mục tiêu là hoàn thành dưới 90 giây; nếu vượt giới hạn, lệnh báo lỗi.
 
 ## Hình đầu ra mẫu
 
