@@ -703,6 +703,8 @@ def bench_storage_command(
 
 
 
+
+
 def _build_demo_steps(
     config_path: Path,
     demo_dir: Path,
@@ -733,6 +735,8 @@ def _build_demo_steps(
         ("viz", "--config", config_arg),
         ("report", "--config", config_arg),
     )
+
+
 
 def _print_demo_top_terms(metrics_path: Path, *, limit: int = 15) -> None:
     """Print top terms used by F06 from the most recent analysis metrics."""
@@ -806,8 +810,7 @@ def demo_command() -> None:
             raise typer.Exit(code=124) from exc
         except subprocess.CalledProcessError as exc:
             typer.echo(
-                f"Demo stage failed: fbpipe {' '.join(args)} "
-                f"(exit={exc.returncode}).",
+                f"Demo stage failed: fbpipe {' '.join(args)} (exit={exc.returncode}).",
                 err=True,
             )
             raise typer.Exit(code=exc.returncode or 1) from exc
