@@ -398,7 +398,7 @@ def viz_command(
     input_path: Path | None = typer.Option(None, "--input"),
     output_dir: Path = typer.Option(Path("docs/figures"), "--output-dir"),
 ) -> None:
-    """Generate matplotlib figures F01/F03/F06/F07/F10/F13/F14/F15."""
+    """Generate matplotlib figures F01/F03/F06/F07/F09/F10/F11/F13/F14/F15."""
     configure_logging()
     cfg = load_config(config)
     data_dir = Path(cfg.project.data_dir)

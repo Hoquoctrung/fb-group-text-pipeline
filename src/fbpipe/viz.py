@@ -20,7 +20,9 @@ FIGURE_NAMES = (
     "F03_length_distribution.png",
     "F06_top_terms_tf_tfidf.png",
     "F07_word_cloud.png",
+    "F09_lda_coherence.png",
     "F10_lda_topics.png",
+    "F11_embedding_map.png",
     "F13_representation_comparison.png",
     "F14_storage_benchmark.png",
     "F15_preprocess_funnel.png",
@@ -67,8 +69,10 @@ def _finish(
         fontsize=8,
         wrap=True,
     )
-    figure.tight_layout(rect=(0, bottom, 1, 0.91))
-    figure.savefig(path, dpi=160, bbox_inches="tight")
+    # Avoid tight_layout's incompatibility warning for nested GridSpec axes (F10).
+    # Fixed subplot margins keep title and footer separated across all figure types.
+    figure.subplots_adjust(left=0.09, right=0.98, top=0.88, bottom=bottom)
+    figure.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(figure)
 
 
@@ -94,7 +98,7 @@ def _draw_f01(plt: Any, frame: pd.DataFrame, out: Path, caption: str) -> None:
         axis.tick_params(axis="x", rotation=55)
         axis.grid(axis="y", alpha=0.25)
     figure.suptitle("F01 — Số bài theo ngày")
-    _finish(plt, figure, out / FIGURE_NAMES[0], caption)
+    _finish(plt, figure, out / "F01_daily_posts.png", caption)
 
 
 def _draw_f03(plt: Any, analysis: dict[str, Any], out: Path, caption: str) -> None:
@@ -108,7 +112,7 @@ def _draw_f03(plt: Any, analysis: dict[str, Any], out: Path, caption: str) -> No
         axis.set_ylabel("Số bài")
         axis.grid(axis="y", alpha=0.25)
     figure.suptitle("F03 — Phân bố độ dài bài")
-    _finish(plt, figure, out / FIGURE_NAMES[1], caption)
+    _finish(plt, figure, out / "F03_length_distribution.png", caption)
 
 
 def _draw_f06(plt: Any, analysis: dict[str, Any], out: Path, caption: str) -> None:
@@ -135,7 +139,7 @@ def _draw_f06(plt: Any, analysis: dict[str, Any], out: Path, caption: str) -> No
         axis.set_title(title)
         axis.grid(axis="x", alpha=0.2)
     figure.suptitle("F06 — So sánh thuật ngữ TF và TF-IDF")
-    _finish(plt, figure, out / FIGURE_NAMES[2], caption, bottom=0.16)
+    _finish(plt, figure, out / "F06_top_terms_tf_tfidf.png", caption, bottom=0.16)
 
 
 _WORD_RE = re.compile(r"[^\W\d_][\w'’\-]*", flags=re.UNICODE)
@@ -290,7 +294,7 @@ def _draw_f07(plt: Any, frame: pd.DataFrame, out: Path, caption: str) -> None:
     _finish(
         plt,
         figure,
-        out / FIGURE_NAMES[3],
+        out / "F07_word_cloud.png",
         f"{caption}. Lọc PII theo regex; tên riêng là heuristic trên "
         "text_cased, không phải NER.",
         bottom=0.14,
@@ -347,13 +351,13 @@ def _draw_f10(plt: Any, data_dir: Path, out: Path, caption: str) -> None:
         figure, axis = plt.subplots(figsize=(8, 5))
         _placeholder(axis, "Thiếu scikit-learn/scipy để chạy LDA trên ma trận BoW.")
         figure.suptitle("F10 — Chủ đề LDA (không khả dụng)")
-        _finish(plt, figure, out / FIGURE_NAMES[4], caption)
+        _finish(plt, figure, out / "F10_lda_topics.png", caption)
         return
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         figure, axis = plt.subplots(figsize=(8, 5))
         _placeholder(axis, str(exc))
         figure.suptitle("F10 — Chủ đề LDA (chưa có kết quả)")
-        _finish(plt, figure, out / FIGURE_NAMES[4], caption)
+        _finish(plt, figure, out / "F10_lda_topics.png", caption)
         return
 
     topic_rows = math.ceil(best_k / 2)
@@ -394,10 +398,298 @@ def _draw_f10(plt: Any, data_dir: Path, out: Path, caption: str) -> None:
     _finish(
         plt,
         figure,
-        out / FIGURE_NAMES[4],
+        out / "F10_lda_topics.png",
         f"{caption}. LDA trên data/gold/bow.npz; thử k=3..8; "
         "max_iter=5; k chọn theo perplexity nhỏ nhất.",
         bottom=0.12,
+    )
+
+
+def _lda_curve(
+    frame: pd.DataFrame,
+    data_dir: Path,
+) -> tuple[list[int], list[float], str, int | None]:
+    """Evaluate k=3..10 with gensim c_v, or sklearn perplexity as fallback."""
+    from scipy import sparse
+    from sklearn.decomposition import LatentDirichletAllocation
+
+    matrix_path = data_dir / "gold" / "bow.npz"
+    vocab_path = data_dir / "gold" / "vocab.json"
+    if not matrix_path.is_file() or not vocab_path.is_file():
+        raise FileNotFoundError(
+            "Missing data/gold/bow.npz or vocab.json; run `fbpipe represent`."
+        )
+    matrix = sparse.load_npz(matrix_path).tocsr()
+    vocabulary_data = json.loads(vocab_path.read_text(encoding="utf-8"))
+    terms = vocabulary_data.get("bow", []) if isinstance(vocabulary_data, dict) else []
+    if matrix.shape[0] != len(frame):
+        raise ValueError("BoW rows do not match Silver rows; rerun `fbpipe represent`.")
+    if not isinstance(terms, list) or len(terms) != matrix.shape[1]:
+        raise ValueError("BoW vocabulary does not match the saved matrix dimensions.")
+    if matrix.shape[1] < 3 or matrix.nnz == 0 or matrix.shape[0] < 2:
+        raise ValueError("BoW is too small or empty for an LDA sweep from k=3 to 10.")
+
+    candidates = list(range(3, 11))
+    fitted: list[tuple[int, Any, float]] = []
+    for k in candidates:
+        model = LatentDirichletAllocation(
+            n_components=k,
+            max_iter=5,
+            learning_method="batch",
+            evaluate_every=-1,
+            random_state=42,
+            n_jobs=1,
+        )
+        model.fit(matrix)
+        fitted.append((k, model, float(model.perplexity(matrix))))
+
+    # Gensim is optional. Use c_v only when Dictionary and CoherenceModel both
+    # work on this corpus. Any compatibility/corpus failure falls back uniformly
+    # to sklearn perplexity rather than mixing measures on one chart.
+    coherence_scores: list[float] = []
+    try:
+        from gensim.corpora import Dictionary
+        from gensim.models import CoherenceModel
+
+        token_column = frame.get("tokens_nostop", pd.Series([[]] * len(frame)))
+        texts = [_as_tokens(value) for value in token_column]
+        texts = [tokens for tokens in texts if tokens]
+        dictionary = Dictionary(texts)
+        if not texts or len(dictionary) == 0:
+            raise ValueError("No tokenized text available for c_v coherence.")
+        known_tokens = set(dictionary.token2id)
+        for _, model, _ in fitted:
+            topic_words: list[list[str]] = []
+            for component in model.components_:
+                words = [
+                    str(terms[index])
+                    for index in component.argsort()[::-1]
+                    if str(terms[index]) in known_tokens
+                    and " " not in str(terms[index])
+                ][:10]
+                if not words:
+                    raise ValueError(
+                        "LDA topic has no words available in c_v dictionary."
+                    )
+                topic_words.append(words)
+            coherence = CoherenceModel(
+                topics=topic_words,
+                texts=texts,
+                dictionary=dictionary,
+                coherence="c_v",
+                processes=1,
+            ).get_coherence()
+            if not math.isfinite(float(coherence)):
+                raise ValueError("gensim returned a non-finite c_v score.")
+            coherence_scores.append(float(coherence))
+        return (
+            candidates,
+            coherence_scores,
+            "c_v",
+            candidates[
+                max(range(len(coherence_scores)), key=coherence_scores.__getitem__)
+            ],
+        )
+    except Exception:
+        perplexities = [score for _, _, score in fitted]
+        best_index = min(range(len(perplexities)), key=perplexities.__getitem__)
+        return candidates, perplexities, "perplexity", candidates[best_index]
+
+
+def _draw_f09(
+    plt: Any,
+    frame: pd.DataFrame,
+    data_dir: Path,
+    out: Path,
+    caption: str,
+) -> None:
+    """Draw LDA coherence c_v or clearly labeled sklearn perplexity fallback."""
+    figure, axis = plt.subplots(figsize=(9, 5))
+    try:
+        ks, values, metric, best_k = _lda_curve(frame, data_dir)
+    except (ImportError, OSError, ValueError, json.JSONDecodeError) as exc:
+        _placeholder(axis, str(exc))
+        figure.suptitle("F09 — LDA coherence/perplexity (không khả dụng)")
+        _finish(plt, figure, out / "F09_lda_coherence.png", caption)
+        return
+
+    axis.plot(ks, values, marker="o")
+    axis.set_xticks(ks)
+    axis.set_xlabel("Số chủ đề k")
+    if metric == "c_v":
+        axis.set_ylabel("Coherence c_v (cao hơn thường tốt hơn)")
+        title = "F09 — LDA coherence c_v theo k=3–10 (gensim)"
+        best_index = values.index(max(values))
+    else:
+        axis.set_ylabel("Perplexity sklearn (thấp hơn thường tốt hơn)")
+        title = "F09 — LDA perplexity theo k=3–10 (sklearn; không phải c_v)"
+        best_index = values.index(min(values))
+    axis.scatter([ks[best_index]], [values[best_index]], s=65, zorder=3)
+    axis.annotate(
+        f"k={best_k}",
+        (ks[best_index], values[best_index]),
+        xytext=(5, 8),
+        textcoords="offset points",
+    )
+    axis.grid(axis="y", alpha=0.25)
+    figure.suptitle(title)
+    if metric == "c_v":
+        note = (
+            "Metric: gensim CoherenceModel(coherence='c_v'); k chọn theo c_v lớn nhất."
+        )
+    else:
+        note = (
+            "Metric: sklearn LDA perplexity; đây không phải coherence c_v. "
+            "k đánh dấu theo perplexity nhỏ nhất."
+        )
+    _finish(plt, figure, out / "F09_lda_coherence.png", f"{caption}. {note}")
+
+
+def _align_rows_to_silver(
+    frame: pd.DataFrame,
+    matrix: Any,
+    doc_ids: list[Any],
+) -> Any:
+    """Align saved rows to Silver by doc_id and reject stale artifact indexes."""
+    if "doc_id" not in frame.columns:
+        raise ValueError("Silver is missing `doc_id`; cannot align representations.")
+    silver_ids = frame["doc_id"].fillna("").astype(str).tolist()
+    ids = [str(item) for item in doc_ids]
+    if len(ids) != matrix.shape[0] or len(set(ids)) != len(ids):
+        raise ValueError(
+            "Representation doc_ids are missing, duplicated, or mismatched."
+        )
+    if len(silver_ids) != len(ids) or set(silver_ids) != set(ids):
+        raise ValueError(
+            "Representation index does not match Silver; rerun `fbpipe represent`."
+        )
+    index_by_id = {doc_id: index for index, doc_id in enumerate(ids)}
+    order = [index_by_id[doc_id] for doc_id in silver_ids]
+    return matrix[order]
+
+
+def _embedding_map_data(
+    frame: pd.DataFrame,
+    data_dir: Path,
+) -> tuple[Any, Any, str, str]:
+    """Return 2D coordinates and KMeans labels, using E5+UMAP or TF-IDF SVD/PCA."""
+    import numpy as np
+    from scipy import sparse
+    from sklearn.cluster import KMeans
+    from sklearn.decomposition import TruncatedSVD
+
+    gold = data_dir / "gold"
+    ids_path = gold / "doc_ids.json"
+    if not ids_path.is_file():
+        raise FileNotFoundError(
+            "Missing data/gold/doc_ids.json; run `fbpipe represent`."
+        )
+    doc_ids = json.loads(ids_path.read_text(encoding="utf-8"))
+    if not isinstance(doc_ids, list):
+        raise ValueError("data/gold/doc_ids.json must contain a JSON list.")
+    e5_path = gold / "e5_embeddings.npy"
+    tfidf_path = gold / "tfidf.npz"
+
+    embeddings = None
+    fallback_reason = "E5 hoặc umap-learn chưa sẵn có"
+    if e5_path.is_file():
+        try:
+            import umap
+
+            candidate = np.load(e5_path, allow_pickle=False)
+            if candidate.ndim != 2:
+                raise ValueError("E5 embeddings must be a 2D matrix.")
+            embeddings = _align_rows_to_silver(frame, candidate, doc_ids)
+            if len(frame) < 3:
+                raise ValueError("UMAP needs at least 3 documents for a stable 2D map.")
+            cluster_count = min(5, max(2, int(math.sqrt(len(frame)))))
+            clusters = KMeans(
+                n_clusters=cluster_count,
+                random_state=42,
+                n_init=10,
+            ).fit_predict(embeddings)
+            coordinates = umap.UMAP(
+                n_components=2,
+                n_neighbors=min(15, len(frame) - 1),
+                min_dist=0.1,
+                metric="cosine",
+                random_state=42,
+                transform_seed=42,
+                n_jobs=1,
+            ).fit_transform(embeddings)
+            return (
+                coordinates,
+                clusters,
+                "UMAP 2D từ embedding E5, tô màu theo KMeans (seed=42)",
+                "E5 + UMAP",
+            )
+        except Exception as exc:
+            fallback_reason = f"E5/UMAP không khả dụng ({type(exc).__name__})"
+
+    if not tfidf_path.is_file():
+        raise FileNotFoundError(
+            "F11 needs E5+umap-learn or data/gold/tfidf.npz for the fallback."
+        )
+    tfidf = sparse.load_npz(tfidf_path).tocsr()
+    tfidf = _align_rows_to_silver(frame, tfidf, doc_ids)
+    if tfidf.shape[0] < 2 or tfidf.shape[1] < 2 or tfidf.nnz == 0:
+        raise ValueError("TF-IDF is too small or empty for a 2D embedding map.")
+
+    if tfidf.shape[1] > 2:
+        coordinates = TruncatedSVD(n_components=2, random_state=42).fit_transform(tfidf)
+        method = "TruncatedSVD 2D từ TF-IDF"
+    else:
+        from sklearn.decomposition import PCA
+
+        coordinates = PCA(n_components=2, random_state=42).fit_transform(
+            tfidf.toarray()
+        )
+        method = "PCA 2D từ TF-IDF"
+    cluster_count = min(5, max(2, int(math.sqrt(len(frame)))))
+    clusters = KMeans(
+        n_clusters=cluster_count,
+        random_state=42,
+        n_init=10,
+    ).fit_predict(tfidf)
+    title = f"{method}, tô màu theo KMeans (fallback: {fallback_reason}; seed=42)"
+    return coordinates, clusters, title, method
+
+
+def _draw_f11(
+    plt: Any,
+    frame: pd.DataFrame,
+    data_dir: Path,
+    out: Path,
+    caption: str,
+) -> None:
+    """Draw an embedding map from E5+UMAP or an explicitly labeled TF-IDF fallback."""
+    figure, axis = plt.subplots(figsize=(8, 6))
+    try:
+        coordinates, clusters, title, method = _embedding_map_data(frame, data_dir)
+        points = axis.scatter(
+            coordinates[:, 0],
+            coordinates[:, 1],
+            c=clusters,
+            cmap="tab10",
+            s=36,
+            alpha=0.85,
+        )
+        colorbar = figure.colorbar(points, ax=axis)
+        colorbar.set_label("Cụm KMeans")
+        axis.set_xlabel(f"{method} — chiều 1")
+        axis.set_ylabel(f"{method} — chiều 2")
+        axis.grid(alpha=0.2)
+        figure.suptitle(f"F11 — {title}")
+    except (ImportError, OSError, ValueError, json.JSONDecodeError) as exc:
+        _placeholder(axis, str(exc))
+        figure.suptitle("F11 — Bản đồ embedding (không khả dụng)")
+    _finish(
+        plt,
+        figure,
+        out / "F11_embedding_map.png",
+        f"{caption}. Seed=42; màu biểu thị cụm KMeans. UMAP+E5 được ưu tiên; "
+        "nếu thiếu thì dùng PCA/TruncatedSVD trên TF-IDF và ghi rõ ở tiêu đề.",
+        bottom=0.16,
     )
 
 
@@ -473,7 +765,7 @@ def _draw_f13(
     _finish(
         plt,
         figure,
-        out / FIGURE_NAMES[5],
+        out / "F13_representation_comparison.png",
         f"{caption}. {label_caption}.",
     )
 
@@ -543,7 +835,7 @@ def _draw_f14(plt: Any, data_dir: Path, out: Path, caption: str) -> None:
         axis.legend()
         axis.grid(axis="y", alpha=0.25)
     figure.suptitle("F14 — Benchmark lưu trữ (bản ghi clone từ Silver)")
-    _finish(plt, figure, out / FIGURE_NAMES[6], caption)
+    _finish(plt, figure, out / "F14_storage_benchmark.png", caption)
 
 
 def _draw_f15(plt: Any, data_dir: Path, out: Path, caption: str) -> None:
@@ -573,7 +865,7 @@ def _draw_f15(plt: Any, data_dir: Path, out: Path, caption: str) -> None:
             if value is not None:
                 axis.text(position, value, f"{int(value)}", ha="center", va="bottom")
     figure.suptitle("F15 — Funnel tiền xử lý")
-    _finish(plt, figure, out / FIGURE_NAMES[7], caption, bottom=0.2)
+    _finish(plt, figure, out / "F15_preprocess_funnel.png", caption, bottom=0.2)
 
 
 def generate_figures(
@@ -582,7 +874,7 @@ def generate_figures(
     data_dir: str | Path = "data",
     output_dir: str | Path = "docs/figures",
 ) -> list[Path]:
-    """Generate F01/F03/F06/F07/F10/F13/F14/F15 without transformer downloads."""
+    """Generate F01/F03/F06/F07/F09/F10/F11/F13/F14/F15 without model downloads."""
     frame = load_silver(input_path)
     plt = _pyplot()
     analysis = analyze_corpus(input_path=input_path, data_dir=data_dir)
@@ -593,7 +885,9 @@ def generate_figures(
     _draw_f03(plt, analysis, destination, caption)
     _draw_f06(plt, analysis, destination, caption)
     _draw_f07(plt, frame, destination, caption)
+    _draw_f09(plt, frame, Path(data_dir), destination, caption)
     _draw_f10(plt, Path(data_dir), destination, caption)
+    _draw_f11(plt, frame, Path(data_dir), destination, caption)
     _draw_f13(plt, Path(data_dir), destination, caption)
     _draw_f14(plt, Path(data_dir), destination, caption)
     _draw_f15(plt, Path(data_dir), destination, caption)

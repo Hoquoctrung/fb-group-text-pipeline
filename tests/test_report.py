@@ -31,6 +31,8 @@ def test_report_summarizes_metrics_and_existing_figures(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     (figures_dir / "F01_daily_posts.png").write_bytes(b"fixture")
+    (figures_dir / "F09_lda_coherence.png").write_bytes(b"fixture")
+    (figures_dir / "F11_embedding_map.png").write_bytes(b"fixture")
 
     result = generate_report(
         metrics_dir=metrics_dir,
@@ -41,10 +43,12 @@ def test_report_summarizes_metrics_and_existing_figures(tmp_path: Path) -> None:
     report = output_path.read_text(encoding="utf-8")
 
     assert result["metrics_count"] == 2
-    assert result["figure_count"] == 1
+    assert result["figure_count"] == 3
     assert "synthetic" in report
     assert "proxy_labels=true" in report
     assert "F01_daily_posts.png" in report
+    assert "F09_lda_coherence.png" in report
+    assert "F11_embedding_map.png" in report
 
 
 def test_report_refuses_manual_report_destination(tmp_path: Path) -> None:

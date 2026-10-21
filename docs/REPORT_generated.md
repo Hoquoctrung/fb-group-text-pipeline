@@ -2,11 +2,11 @@
 
 > Tệp này được sinh từ `data/metrics/*.json` và danh sách hình trong `docs/figures/`. Lệnh `fbpipe report` không sửa hoặc ghi đè `docs/REPORT.md`.
 
-- Thời điểm sinh (UTC): `2026-10-21T13:58:41+00:00`
+- Thời điểm sinh (UTC): `2026-10-21T15:05:23+00:00`
 - Thư mục metrics: `data/metrics`
 - Thư mục hình: `docs/figures`
 - Số tệp metrics đọc được: **9**
-- Số hình/đầu ra đồ họa liệt kê được: **8**
+- Số hình/đầu ra đồ họa liệt kê được: **10**
 
 ## Nguồn dữ liệu và giới hạn diễn giải
 
@@ -28,7 +28,7 @@ Các bản ghi `synthetic` và các dòng benchmark nhân bản chỉ dùng ki�
 | Trường | Giá trị |
 |---|---|
 | `stage` | `"analyze"` |
-| `created_at` | `"2026-10-21T13:58:36.379881+00:00"` |
+| `created_at` | `"2026-10-21T15:05:16.525033+00:00"` |
 | `input_path` | `"data/silver/documents.parquet"` |
 | `n_documents` | `200` |
 | `source_column_present` | `true` |
@@ -132,7 +132,9 @@ Các bản ghi `synthetic` và các dòng benchmark nhân bản chỉ dùng ki�
 - [F03_length_distribution.png](figures/F03_length_distribution.png)
 - [F06_top_terms_tf_tfidf.png](figures/F06_top_terms_tf_tfidf.png)
 - [F07_word_cloud.png](figures/F07_word_cloud.png)
+- [F09_lda_coherence.png](figures/F09_lda_coherence.png)
 - [F10_lda_topics.png](figures/F10_lda_topics.png)
+- [F11_embedding_map.png](figures/F11_embedding_map.png)
 - [F13_representation_comparison.png](figures/F13_representation_comparison.png)
 - [F14_storage_benchmark.png](figures/F14_storage_benchmark.png)
 - [F15_preprocess_funnel.png](figures/F15_preprocess_funnel.png)
@@ -155,9 +157,17 @@ Các bản ghi `synthetic` và các dòng benchmark nhân bản chỉ dùng ki�
 
 ![F07_word_cloud.png](figures/F07_word_cloud.png)
 
+#### F09_lda_coherence
+
+![F09_lda_coherence.png](figures/F09_lda_coherence.png)
+
 #### F10_lda_topics
 
 ![F10_lda_topics.png](figures/F10_lda_topics.png)
+
+#### F11_embedding_map
+
+![F11_embedding_map.png](figures/F11_embedding_map.png)
 
 #### F13_representation_comparison
 
@@ -173,7 +183,7 @@ Các bản ghi `synthetic` và các dòng benchmark nhân bản chỉ dùng ki�
 
 ## Nhận định của người nghiên cứu
 
-<!-- TRUNG VIẾT: xem dữ liệu được phép sử dụng, kiểm tra từng hình và bổ sung nhận định có bằng chứng. Không suy rộng từ dữ liệu synthetic hoặc proxy labels. -->
+<!-- TRUNG VIẾT: Kiểm tra từng hình và bổ sung nhận định có bằng chứng. Không suy rộng từ dữ liệu synthetic hoặc proxy labels. -->
 
 ## Tái lập
 
