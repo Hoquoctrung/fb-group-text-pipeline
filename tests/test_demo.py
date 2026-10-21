@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import subprocess
 
-import fbpipe.cli as cli
 from typer.testing import CliRunner
 
+import fbpipe.cli as cli
 from fbpipe.cli import app
 
 
