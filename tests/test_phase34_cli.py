@@ -4,9 +4,9 @@ import json
 import re
 from pathlib import Path
 
-import fbpipe.cli as cli
 from typer.testing import CliRunner
 
+import fbpipe.cli as cli
 from fbpipe.cli import app
 
 
