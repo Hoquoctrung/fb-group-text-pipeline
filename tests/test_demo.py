@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 
 import fbpipe.cli as cli
 from typer.testing import CliRunner
