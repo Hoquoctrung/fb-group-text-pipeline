@@ -2,6 +2,8 @@
 
 > Không điền số liệu giả. Mọi số đo biểu diễn và lưu trữ phải lấy từ file metrics sinh bởi CLI. Phần **Nhận định** để Trung tự viết sau khi xem dữ liệu được phép sử dụng.
 
+> **Báo cáo tự động:** [`REPORT_generated.md`](REPORT_generated.md) — được tạo bằng `fbpipe report`; lệnh không ghi đè tài liệu thủ công này.
+
 ## §2. So sánh 5 kỹ thuật thu thập (Bảng 1)
 
 | Kỹ thuật | Định nghĩa ngắn | Dùng khi | Ưu điểm | Nhược điểm | Hiện thực trong phạm vi 48 giờ |

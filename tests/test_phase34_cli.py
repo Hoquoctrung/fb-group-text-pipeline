@@ -1,4 +1,4 @@
-"""CLI surface tests for Phase 3 and Phase 4 commands."""
+"""CLI surface tests for Phase 3 to Phase 5 commands."""
 
 from typer.testing import CliRunner
 
@@ -10,6 +10,8 @@ def test_phase_3_and_4_commands_are_registered() -> None:
     assert result.exit_code == 0, result.output
     for command in (
         "represent",
+        "analyze",
+        "viz",
         "label-sample",
         "label-eval",
         "store",

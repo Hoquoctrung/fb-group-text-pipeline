@@ -30,7 +30,7 @@ class ImportCollector(Collector):
     ) -> None:
         self.path = Path(path)
         self.group_id = group_id
-        self.salt = salt or os.getenv("FBPIPE_SALT")
+        self.salt = os.getenv("FBPIPE_SALT", "") if salt is None else salt
         self.errors: list[str] = []
 
     def iter_posts(self) -> Iterator[RawPost]:

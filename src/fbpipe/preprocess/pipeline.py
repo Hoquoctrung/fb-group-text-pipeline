@@ -20,11 +20,13 @@ from fbpipe.preprocess.steps import (
 )
 from fbpipe.privacy import scrub_pii
 from fbpipe.schema import RawPost
+from fbpipe.source import normalize_source
 
 OUTPUT_COLUMNS = [
     "doc_id",
     "parent_id",
     "doc_type",
+    "source",
     "created_at",
     "year_month",
     "author_hash",
@@ -96,6 +98,7 @@ def _read_bronze(input_files: list[Path]) -> tuple[list[dict[str, Any]], int, in
                         "doc_id": post.post_id,
                         "parent_id": None,
                         "doc_type": "post",
+                        "source": normalize_source(post.source),
                         "created_at": created_at,
                         "year_month": year_month,
                         "author_hash": post.author_hash,
@@ -519,6 +522,7 @@ def preprocess_corpus(
         ) from exc
 
     for doc in docs:
+        doc["source"] = normalize_source(doc.get("source"))
         raw_text = str(doc.get("text_raw", ""))
         safe_text = scrub_pii(raw_text)
         doc["text_raw"] = re.sub(r"(?<!\w)@[A-Za-z0-9_.]+", "<USER>", safe_text)

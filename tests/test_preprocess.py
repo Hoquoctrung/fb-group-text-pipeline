@@ -222,7 +222,10 @@ def test_preprocess_writes_parquet_and_metrics(tmp_path: Path) -> None:
     assert result.metrics_path.exists()
     frame = pd.read_parquet(result.output_path)
     assert len(frame) == 4
-    assert {"text_clean", "tokens", "tokens_nostop", "keep"}.issubset(frame.columns)
+    assert {"text_clean", "tokens", "tokens_nostop", "keep", "source"}.issubset(
+        frame.columns
+    )
+    assert set(frame["source"]) == {"synthetic"}
     metrics = json.loads(result.metrics_path.read_text(encoding="utf-8"))
     assert len(metrics["ablation"]) == 3
     assert metrics["n_raw"] == 4

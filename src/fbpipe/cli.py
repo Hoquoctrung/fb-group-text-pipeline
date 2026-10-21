@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 import typer
 from dotenv import load_dotenv
 
+from fbpipe.analysis import analyze_corpus
 from fbpipe.collect.import_collector import ImportCollector
 from fbpipe.collect.playwright_collector import (
     CollectionBlocked,
@@ -24,11 +25,13 @@ from fbpipe.config import load_config
 from fbpipe.logging_utils import configure_logging
 from fbpipe.metrics import write_metrics
 from fbpipe.preprocess.pipeline import preprocess_corpus
+from fbpipe.report import generate_report
 from fbpipe.represent.labeling import evaluate_labels, sample_label_file
 from fbpipe.represent.pipeline import represent_corpus
 from fbpipe.storage.benchmark import benchmark_storage
 from fbpipe.storage.parquet_store import ParquetStore
 from fbpipe.storage.sqlite_store import SQLiteStore
+from fbpipe.viz import generate_figures
 
 if TYPE_CHECKING:
     from playwright.sync_api import Response
@@ -365,6 +368,83 @@ def preprocess_command(
     typer.echo(
         f"Preprocessed {result.raw_records} posts -> {result.output_path}; "
         f"invalid records: {result.invalid_records}; metrics: {result.metrics_path}"
+    )
+
+
+@app.command("analyze")
+def analyze_command(
+    config: Path = typer.Option(Path("configs/default.yaml"), "--config", exists=True),
+    input_path: Path | None = typer.Option(None, "--input"),
+) -> None:
+    """Summarize Silver data and write fast analysis metrics without loading E5."""
+    configure_logging()
+    cfg = load_config(config)
+    data_dir = Path(cfg.project.data_dir)
+    source_path = input_path or data_dir / "silver" / "documents.parquet"
+    try:
+        result = analyze_corpus(input_path=source_path, data_dir=data_dir)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"Analyzed {result['n_documents']} documents -> "
+        f"{result['metrics_path']}; source={result['source_counts']}"
+    )
+
+
+@app.command("viz")
+def viz_command(
+    config: Path = typer.Option(Path("configs/default.yaml"), "--config", exists=True),
+    input_path: Path | None = typer.Option(None, "--input"),
+    output_dir: Path = typer.Option(Path("docs/figures"), "--output-dir"),
+) -> None:
+    """Generate matplotlib figures F01/F03/F06/F07/F10/F13/F14/F15."""
+    configure_logging()
+    cfg = load_config(config)
+    data_dir = Path(cfg.project.data_dir)
+    source_path = input_path or data_dir / "silver" / "documents.parquet"
+    try:
+        generated = generate_figures(
+            input_path=source_path,
+            data_dir=data_dir,
+            output_dir=output_dir,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=4) from exc
+    typer.echo(f"Generated {len(generated)} matplotlib figures -> {output_dir}")
+    for figure in generated:
+        typer.echo(f"- {figure}")
+
+
+@app.command("report")
+def report_command(
+    config: Path = typer.Option(Path("configs/default.yaml"), "--config", exists=True),
+    metrics_dir: Path | None = typer.Option(None, "--metrics-dir"),
+    figures_dir: Path = typer.Option(Path("docs/figures"), "--figures-dir"),
+    output: Path = typer.Option(Path("docs/REPORT_generated.md"), "--output"),
+) -> None:
+    """Generate metrics report without replacing the manual report."""
+    configure_logging()
+    cfg = load_config(config)
+    data_dir = Path(cfg.project.data_dir)
+    selected_metrics_dir = metrics_dir or data_dir / "metrics"
+    try:
+        result = generate_report(
+            metrics_dir=selected_metrics_dir,
+            figures_dir=figures_dir,
+            output_path=output,
+            manual_report_path=Path("docs/REPORT.md"),
+        )
+    except (OSError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"Generated {result['output_path']}; metrics={result['metrics_count']} "
+        f"(errors={result['metrics_errors']}), figures={result['figure_count']}"
     )
 
 

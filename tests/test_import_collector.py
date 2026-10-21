@@ -52,9 +52,11 @@ def test_import_skips_invalid_row_and_reports_error(tmp_path) -> None:
     assert "text is required" in collector.errors[0]
 
 
-def test_import_requires_salt_for_author_hashing(tmp_path) -> None:
+def test_import_requires_salt_for_author_hashing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("FBPIPE_SALT", "development-environment-salt")
     path = tmp_path / "posts.csv"
     path.write_text("author,text\nu,hello\n", encoding="utf-8")
+    # An explicit empty salt must not silently fall back to the environment.
     collector = ImportCollector(path, group_id="g1", salt="")
     posts = list(collector.iter_posts())
     assert posts == []

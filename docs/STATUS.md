@@ -1,11 +1,11 @@
-# Trạng thái dự án — Phase 0 đến Phase 4 (phạm vi rút gọn)
+# Trạng thái dự án — Phase 0 đến Phase 6 (phạm vi rút gọn)
 
 **Cập nhật:** 2026-10-21
-**Phạm vi:** `docs/SPEC.md` §0, §0b và các DoD Phase 0–4 trong phạm vi rút gọn. Phase 2 dùng ablation 3 cấu hình; Phase 3–4 chỉ triển khai BoW/TF-IDF/E5 tùy chọn, labeling, SQLite/FTS5, Parquet và benchmark 1k.
+**Phạm vi:** `docs/SPEC.md` §0, §0b và các DoD Phase 0–6 trong phạm vi rút gọn. Phase 2 dùng ablation 3 cấu hình; Phase 3–4 triển khai BoW/TF-IDF/E5 tùy chọn, labeling, SQLite/FTS5, Parquet và benchmark 1k; Phase 5–6 bổ sung phân tích, hình matplotlib và báo cáo metrics tự động.
 
 > Báo cáo này chỉ ghi nhận những gì đã có bằng chứng từ output Terminal, danh sách file Git và ảnh GitHub Actions do người phát triển cung cấp. “Đã có code” không đồng nghĩa với “đã kiểm thử end-to-end”. Không dùng synthetic làm kết quả nghiên cứu thực tế.
 
-### Snapshot mới nhất (sau triển khai Phase 3–4; chưa commit)
+### Snapshot kiểm chứng gần nhất và phần mới chờ xác minh
 
 - `pytest -q`: **61 passed** trên máy phát triển.
 - `ruff check src tests`, `ruff format --check src tests` và `pre-commit run --all-files`: **đều pass**. Pylance Problems được người phát triển xác nhận là **0**.
@@ -13,7 +13,8 @@
 - `fbpipe label-sample --n 200`: xuất 200 dòng vào `data/labels/to_label.csv`. Chưa có bằng chứng người phát triển đã điền nhãn tay; `fbpipe label-eval` vì vậy dùng nhãn yếu và ghi `proxy_labels=true`. Các điểm macro-F1 được in ra chỉ là chẩn đoán theo nhãn proxy, không phải đánh giá có nhãn chuẩn.
 - `fbpipe store`: đã lưu 200 dòng Silver vào SQLite (`data/fbpipe.db`) và Parquet (`data/store/documents.parquet`).
 - `fbpipe bench-storage --n 1000 --iterations 20`: đã hoàn tất benchmark SQLite FTS5/Parquet trên 1.000 bản ghi clone; metrics ở `data/metrics/bench_storage.json`. Đây là dữ liệu benchmark nhân bản, không phải 1.000 bài Facebook thật.
-- Phase 3–4 đang ở trạng thái **đã chạy kiểm thử trên máy phát triển, chờ rà soát và commit**. Dữ liệu sinh ra trong `data/` không được stage/commit.
+- Phase 3–4: đã có log máy phát triển cho 61 tests pass, pre-commit pass, E5 available, store 200 dòng và benchmark 1k/20 iterations. Tình trạng commit cần kiểm tra trực tiếp bằng Git. Dữ liệu sinh ra trong `data/` không được stage/commit.
+- Phase 5–6: patch thêm `fbpipe analyze`, `fbpipe viz`, `fbpipe report`, README/CHALLENGES/STATUS và `docs/REPORT_generated.md` generator. **Chưa có output trên máy phát triển xác nhận các hình và báo cáo được sinh sau patch này**; không đánh dấu end-to-end hoàn tất trước khi chạy lệnh ở mục 9.
 
 ## 1. File hiện có theo module
 
@@ -32,12 +33,16 @@
 ### Source: `src/fbpipe/`
 
 - `__init__.py`
-- `cli.py` — các lệnh `auth`, `probe`, `synth`, `import`, `crawl`, `preprocess`, `represent`, `label-sample`, `label-eval`, `store`, `bench-storage`, `validate`
+- `cli.py` — các lệnh `auth`, `probe`, `synth`, `import`, `crawl`, `preprocess`, `analyze`, `represent`, `label-sample`, `label-eval`, `store`, `bench-storage`, `viz`, `report`, `validate`
 - `config.py`
 - `logging_utils.py`
 - `metrics.py`
 - `privacy.py`
 - `schema.py`
+- `analysis.py` — metrics gọn và thống kê nguồn từ Silver
+- `source.py` — chuẩn hóa provenance `synthetic`/`import`/`playwright`/`unknown`
+- `viz.py` — biểu đồ matplotlib trong phạm vi rút gọn
+- `report.py` — tổng hợp metrics JSON và danh sách hình thành Markdown; không ghi đè báo cáo thủ công
 
 ### Preprocess: `src/fbpipe/preprocess/`
 
@@ -91,6 +96,7 @@
 - `tests/test_labeling.py` — kiểm thử lấy mẫu và nhãn yếu
 - `tests/test_storage.py` — kiểm thử SQLite FTS5, Parquet và benchmark
 - `tests/test_phase34_cli.py` — kiểm thử CLI Phase 3–4
+- `tests/test_report.py` — test report metrics/hình, cảnh báo proxy và bảo vệ `REPORT.md`
 - `tests/fixtures/README.md`
 - `tests/fixtures/graphql_sample.txt` — fixture tự tạo, không phải schema Facebook thật
 
@@ -100,7 +106,8 @@
 - `docs/CHALLENGES.md`
 - `docs/DECISIONS.md`
 - `docs/ETHICS.md`
-- `docs/REPORT.md`
+- `docs/REPORT.md` — báo cáo thủ công, giữ Bảng 1 và placeholder Nhận định
+- `docs/REPORT_generated.md` — đầu ra runtime của `fbpipe report`, không phải file đầu vào patch
 - `docs/SPEC.md`
 - `docs/STATUS.md` — tài liệu này
 - `data/sample/.gitkeep`
@@ -109,7 +116,7 @@
 ### Phần không có trong danh sách file đã commit
 
 - Chưa có notebook demo trong danh sách file Git đã kiểm tra.
-- Phase 3–4 có bản triển khai tối thiểu và đã được kiểm tra trên máy phát triển như ghi ở các mục dưới. Viz, phân tích chủ đề, dashboard và report automation đầy đủ vẫn thuộc phase sau.
+- Phase 3–4 có bản triển khai tối thiểu, đã được kiểm tra trên máy phát triển như ghi ở các mục dưới. Phase 5–6 có code phân tích/hình/báo cáo tự động trong phạm vi rút gọn; cần chạy và duyệt artifact trên máy phát triển trước khi đánh dấu hoàn thành.
 - Không có DOM parser fallback, API demo hoặc streaming simulation — phù hợp ngoại lệ phạm vi §0b.
 
 ## 2. DoD Phase 0 — Scaffold
@@ -207,10 +214,10 @@
 ### Phần scope còn lại của dự án
 
 1. Tạo **một notebook demo** (không tạo lại bảy notebook đã bị loại).
-2. Sinh những hình được giữ trong phạm vi rút gọn: F01, F03, F06, F07, F09, F10, F11, F13, F14, F15.
-3. Hoàn thiện báo cáo tự động; phần **Nhận định** giữ placeholder để Trung tự viết dựa trên dữ liệu được phép sử dụng.
+2. Chạy và duyệt hình trong phạm vi rút gọn: F01, F03, F06, F07, F10, F13, F14, F15. F09 và F11 chưa thuộc lượt viz rút gọn này.
+3. Chạy `fbpipe report` để tạo `docs/REPORT_generated.md`; bảo đảm `docs/REPORT.md` thủ công không bị ghi đè. Phần **Nhận định** giữ placeholder để Trung tự viết dựa trên dữ liệu được phép sử dụng.
 4. Không triển khai MongoDB, Elasticsearch, Postgres, Docker, DuckDB, Streamlit, `stream_sim`, `api_demo_hn`, NMF/BERTopic hoặc capture–recapture theo §0b; chỉ mô tả lý thuyết nơi phù hợp.
-5. Phase 3–4 **chưa được commit/push** ở thời điểm snapshot này; trước commit, xem `git diff --cached --check`, danh sách staged và xác nhận không có `data/`, `.env` hoặc `.auth/`.
+5. Các thay đổi Phase 5–6 cần được kiểm tra bằng `git diff --check`, danh sách staged và xác nhận không có `data/`, `.env` hoặc `.auth/` trước commit/push.
 
 ## 8. Lệnh kiểm chứng
 
@@ -310,3 +317,37 @@ Mở GitHub repository → **Actions**. Bằng chứng đã quan sát là workfl
 ### Kiểm tra live (chưa chạy)
 
 Chỉ sau khi có quyền thu thập và đã đọc `docs/ETHICS.md`, hãy chạy `fbpipe auth` rồi `fbpipe probe`. **Không chạy `fbpipe crawl` hoặc `fbpipe crawl --resume` chỉ để đánh dấu DoD** nếu chưa có quyền hoặc chưa sẵn sàng xử lý dữ liệu. Nếu gặp restriction, dừng lại; không thử né chặn.
+
+
+## 9. Phase 5–6 — Analyze, Viz, Report (patch đang chờ xác minh)
+
+| Hạng mục | Trạng thái | Điều kiện xác nhận |
+|---|---|---|
+| `source` trong Silver, fallback dữ liệu cũ thành `unknown` | [x] Có code | Chạy `fbpipe preprocess --force`; kiểm tra `fbpipe analyze` báo đúng `source_counts` |
+| `fbpipe analyze` ghi metrics phân tích nhanh | [x] Có code | Chạy lệnh và kiểm tra `data/metrics/analyze.json` |
+| `fbpipe viz` dùng matplotlib và ghi F01/F03/F06/F07/F10/F13/F14/F15 | [x] Có code trong patch | Chạy và duyệt các PNG trong `docs/figures/`; kiểm tra chú thích nguồn, đặc biệt nguồn `unknown`/synthetic |
+| F13 cảnh báo `proxy_labels=true` khi không có nhãn tay | [x] Có code trong patch | Kiểm tra hình và `data/metrics/label_eval.json`; không diễn giải score proxy như ground truth |
+| `fbpipe report` tổng hợp `data/metrics/*.json` + danh sách hình hiện có | [x] Có code trong patch | Chạy lệnh; kiểm tra `docs/REPORT_generated.md` và xác nhận `docs/REPORT.md` không thay đổi ngoài liên kết thủ công |
+| README pipeline/quickstart/trạng thái trung thực | [x] Cập nhật trong patch | Duyệt nội dung sau khi áp dụng |
+| CHALLENGES ghi số đo đã có và `pending` cho mục chưa đo | [x] Cập nhật trong patch | Đối chiếu số liệu với metrics trên máy phát triển |
+| Ruff, format, pre-commit và pytest cho patch Phase 5–6 | [ ] Chưa chạy cho patch này | Người phát triển chạy toàn bộ lệnh kiểm tra trên máy |
+
+### Lệnh xác minh Phase 5–6
+
+```bash
+# Cập nhật Silver để có cột source trên dữ liệu mới/legacy
+fbpipe preprocess --force
+fbpipe analyze
+fbpipe viz
+fbpipe report
+
+ruff check src tests
+ruff format --check src tests
+pre-commit run --all-files
+pytest -q
+
+git diff --check
+git status --short
+```
+
+`docs/REPORT_generated.md` là artifact sinh ra từ các metrics/hình hiện có; không cần commit file này trừ khi dự án chủ động lưu snapshot báo cáo. Không đưa dữ liệu thật, `.env`, `.auth/` hay metrics nhạy cảm vào Git.

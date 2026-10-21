@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Attachment(BaseModel):
@@ -47,5 +47,20 @@ class RawPost(BaseModel):
     shares_count: int | None = None
     attachments: list[Attachment] = Field(default_factory=list)
     comments: list[Comment] = Field(default_factory=list)
-    source: Literal["playwright_graphql", "playwright_dom", "import", "synthetic"]
     content_hash: str
+    source: Literal[
+        "playwright_graphql",
+        "playwright_dom",
+        "playwright",
+        "import",
+        "synthetic",
+        "unknown",
+    ] = "unknown"
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def blank_source_is_unknown(cls, value: object) -> object:
+        """Keep older records valid when provenance is absent or blank."""
+        if value is None or not str(value).strip():
+            return "unknown"
+        return value
