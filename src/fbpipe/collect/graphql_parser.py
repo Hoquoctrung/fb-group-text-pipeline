@@ -70,7 +70,7 @@ def _parse_datetime(value: Any) -> datetime | None:
     """Parse ISO strings or Unix timestamps to UTC."""
     if value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         try:
             return datetime.fromtimestamp(value, tz=UTC)
         except (OverflowError, OSError, ValueError):

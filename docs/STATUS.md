@@ -1,6 +1,6 @@
 # Trạng thái dự án — Phase 0 + Phase 1
 
-**Cập nhật:** 2026-10-21  
+**Cập nhật:** 2026-10-21
 **Phạm vi:** SPEC.md §0, §0b và DoD Phase 0–1. §0b được ưu tiên khi có mâu thuẫn.
 
 > Báo cáo này chỉ ghi nhận những gì đã có bằng chứng từ output Terminal, danh sách file Git và ảnh GitHub Actions do người phát triển cung cấp. “Đã có code” không đồng nghĩa với “đã kiểm thử end-to-end”. Không dùng synthetic làm kết quả nghiên cứu thực tế.
