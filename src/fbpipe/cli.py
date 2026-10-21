@@ -9,10 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import typer
-
-if TYPE_CHECKING:
-    from playwright.sync_api import Response
-
 from dotenv import load_dotenv
 
 from fbpipe.collect.import_collector import ImportCollector
@@ -27,6 +23,10 @@ from fbpipe.collect.synthetic import SyntheticCollector
 from fbpipe.config import load_config
 from fbpipe.logging_utils import configure_logging
 from fbpipe.metrics import write_metrics
+from fbpipe.preprocess.pipeline import preprocess_corpus
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Response
 
 load_dotenv()
 
@@ -143,7 +143,7 @@ def probe_command(
         page = context.new_page()
 
         def handle_response(response: Response) -> None:
-            if "/api/graphql" not in getattr(response, "url", ""):
+            if "/api/graphql" not in response.url:
                 return
             try:
                 responses.append(response.body().decode("utf-8", errors="replace"))
@@ -255,12 +255,10 @@ def _validate_crawl_state(
     """Validate existing files before starting or resuming a crawl."""
     checkpoint_exists = checkpoint_path.exists()
     output_exists = output_path.exists()
-
     if resume and not (checkpoint_exists and output_exists):
         raise typer.BadParameter(
             "--resume requires both an existing checkpoint and Bronze JSONL file."
         )
-
     if not resume and (checkpoint_exists or output_exists):
         raise typer.BadParameter(
             "Existing crawl state found. Use --resume to continue, or archive "
@@ -270,11 +268,7 @@ def _validate_crawl_state(
 
 @app.command("crawl")
 def crawl_command(
-    config: Path = typer.Option(
-        Path("configs/default.yaml"),
-        "--config",
-        exists=True,
-    ),
+    config: Path = typer.Option(Path("configs/default.yaml"), "--config", exists=True),
     resume: bool = typer.Option(
         False,
         "--resume",
@@ -284,13 +278,11 @@ def crawl_command(
     """Collect via passive browser responses, stopping on restrictions."""
     configure_logging()
     cfg = load_config(config)
-
     if not cfg.compliance.acknowledged:
         raise typer.BadParameter(
             "Review docs/ETHICS.md and obtain authorization, then explicitly set "
             "compliance.acknowledged=true in the config."
         )
-
     if not os.getenv("FBPIPE_SALT"):
         raise typer.BadParameter(
             "FBPIPE_SALT is required; configure it in your local .env."
@@ -299,7 +291,6 @@ def crawl_command(
     bronze_dir = Path(cfg.project.data_dir) / "bronze"
     output = bronze_dir / "raw_posts.jsonl"
     checkpoint_path = bronze_dir / "checkpoint.json"
-
     _validate_crawl_state(
         resume=resume,
         checkpoint_path=checkpoint_path,
@@ -320,17 +311,11 @@ def crawl_command(
         seed=cfg.project.seed,
         resume=resume,
     )
-
     try:
-        count = _write_jsonl(
-            collector.iter_posts(),
-            output,
-            append=resume,
-        )
+        count = _write_jsonl(collector.iter_posts(), output, append=resume)
     except CollectionBlocked as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=3) from exc
-
     write_metrics(
         "crawl",
         {
@@ -341,8 +326,41 @@ def crawl_command(
         },
         cfg.project.data_dir,
     )
-
     typer.echo(f"Collected {count} new posts -> {output}")
+
+
+@app.command("preprocess")
+def preprocess_command(
+    config: Path = typer.Option(Path("configs/default.yaml"), "--config", exists=True),
+    input_dir: Path | None = typer.Option(None, "--input-dir"),
+    output: Path | None = typer.Option(None, "--output"),
+    force: bool = typer.Option(False, "--force"),
+) -> None:
+    """Run S0-S11 preprocessing and write Silver Parquet plus metrics."""
+    configure_logging()
+    cfg = load_config(config)
+    data_dir = Path(cfg.project.data_dir)
+    source_dir = input_dir or data_dir / "bronze"
+    output_path = output or data_dir / "silver" / "documents.parquet"
+    try:
+        result = preprocess_corpus(
+            input_dir=source_dir,
+            output_path=output_path,
+            data_dir=data_dir,
+            resource_dir=Path("resources"),
+            settings=cfg.preprocess,
+            force=force,
+        )
+    except (FileNotFoundError, RuntimeError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=4 if isinstance(exc, RuntimeError) else 2) from exc
+    if result.skipped_as_up_to_date:
+        typer.echo(f"Preprocess is up to date: {result.output_path}")
+        return
+    typer.echo(
+        f"Preprocessed {result.raw_records} posts -> {result.output_path}; "
+        f"invalid records: {result.invalid_records}; metrics: {result.metrics_path}"
+    )
 
 
 @app.command("validate")

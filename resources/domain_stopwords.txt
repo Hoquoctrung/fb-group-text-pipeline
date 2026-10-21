@@ -1,0 +1,2 @@
+# Domain stopwords manually approved by a reviewer go below, one token per line.
+# Lines prefixed with '# candidate:' are generated suggestions and are NOT active.
