@@ -62,7 +62,7 @@ def test_demo_runs_all_offline_stages_and_prints_f06_terms(
         assert timeout > 0
         args = tuple(command[3:])
         calls.append(args)
-        if args == ("analyze",):
+        if args and args[0] == "analyze":
             metrics_path = tmp_path / "data" / "demo" / "metrics" / "analyze.json"
             metrics_path.parent.mkdir(parents=True, exist_ok=True)
             metrics_path.write_text(
