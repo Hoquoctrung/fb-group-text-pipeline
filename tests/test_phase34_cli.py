@@ -2,6 +2,7 @@
 
 import json
 import re
+from pathlib import Path
 
 import fbpipe.cli as cli
 from typer.testing import CliRunner
@@ -62,7 +63,7 @@ def test_demo_runs_all_offline_stages_and_prints_f06_terms(
         args = tuple(command[3:])
         calls.append(args)
         if args == ("analyze",):
-            metrics_path = tmp_path / "data" / "metrics" / "analyze.json"
+            metrics_path = tmp_path / "data" / "demo" / "metrics" / "analyze.json"
             metrics_path.parent.mkdir(parents=True, exist_ok=True)
             metrics_path.write_text(
                 json.dumps(
@@ -77,14 +78,29 @@ def test_demo_runs_all_offline_stages_and_prints_f06_terms(
                 encoding="utf-8",
             )
 
+    existing_import = tmp_path / "data" / "bronze" / "my_import.jsonl"
+    existing_import.parent.mkdir(parents=True, exist_ok=True)
+    existing_import.write_text("{}\n", encoding="utf-8")
+    stale_demo = tmp_path / "data" / "demo" / "stale.jsonl"
+    stale_demo.parent.mkdir(parents=True, exist_ok=True)
+    stale_demo.write_text("{}\n", encoding="utf-8")
+
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli.subprocess, "run", fake_run)
     result = CliRunner().invoke(app, ["demo"])
 
     assert result.exit_code == 0, result.output
-    assert calls == list(cli._DEMO_STEPS)
-    assert calls[0] == ("synth", "--n", "200")
-    assert ("represent", "--skip-e5", "--force") in calls
+    assert calls == list(
+        cli._build_demo_steps(
+            Path("data/demo-config.yaml"),
+            Path("data/demo"),
+        )
+    )
+    assert calls[0][:3] == ("synth", "--n", "200")
+    assert "--skip-e5" in calls[2]
+    assert "--force" in calls[2]
+    assert existing_import.exists()
+    assert not stale_demo.exists()
     assert "người: 7" in result.output
     assert "thông_tin: 0.25" in result.output
     assert "target: under 90s" in result.output
