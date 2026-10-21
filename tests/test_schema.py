@@ -23,15 +23,17 @@ def test_raw_post_accepts_minimal_valid_record() -> None:
 
 def test_raw_post_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError):
-        RawPost(
-            post_id="p1",
-            group_id="g1",
-            author_hash="a1",
-            collected_at=datetime.now(UTC),
-            text="hello",
-            source="synthetic",
-            content_hash="abc",
-            facebook_internal_field="do-not-invent",
+        RawPost.model_validate(
+            {
+                "post_id": "p1",
+                "group_id": "g1",
+                "author_hash": "a1",
+                "collected_at": datetime.now(UTC),
+                "text": "hello",
+                "source": "synthetic",
+                "content_hash": "abc",
+                "facebook_internal_field": "some_value",
+            }
         )
 
 
@@ -53,13 +55,15 @@ def test_raw_post_defaults_missing_source_to_unknown() -> None:
 
 
 def test_raw_post_blank_source_becomes_unknown() -> None:
-    post = RawPost(
-        post_id="legacy-p2",
-        group_id="g1",
-        author_hash="a1",
-        collected_at=datetime(2026, 1, 1, tzinfo=UTC),
-        text="legacy record",
-        source=" ",
-        content_hash="abc",
+    post = RawPost.model_validate(
+        {
+            "post_id": "legacy-p2",
+            "group_id": "g1",
+            "author_hash": "a1",
+            "collected_at": datetime(2026, 1, 1, tzinfo=UTC),
+            "text": "legacy record",
+            "source": " ",
+            "content_hash": "abc",
+        }
     )
     assert post.source == "unknown"
