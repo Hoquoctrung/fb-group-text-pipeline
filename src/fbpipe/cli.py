@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import typer
+import yaml
 from dotenv import load_dotenv
 
 from fbpipe.analysis import analyze_corpus
@@ -221,12 +223,18 @@ def synth_command(
     n: int = typer.Option(100, "--n", min=1),
     output: Path = typer.Option(Path("data/bronze/synthetic.jsonl"), "--output"),
     seed: int = typer.Option(42, "--seed"),
+    config: Path = typer.Option(Path("configs/default.yaml"), "--config", exists=True),
 ) -> None:
     """Generate deterministic synthetic Bronze posts."""
     configure_logging()
+    cfg = load_config(config)
     posts = SyntheticCollector(n=n, seed=seed).iter_posts()
     count = _write_jsonl(posts, output)
-    write_metrics("synthetic", {"records": count, "seed": seed, "output": str(output)})
+    write_metrics(
+        "synthetic",
+        {"records": count, "seed": seed, "output": str(output)},
+        cfg.project.data_dir,
+    )
     typer.echo(f"Generated {count} synthetic posts -> {output}")
 
 
@@ -695,17 +703,36 @@ def bench_storage_command(
 
 
 
-_DEMO_STEPS: tuple[tuple[str, ...], ...] = (
-    ("synth", "--n", "200"),
-    ("preprocess", "--force"),
-    ("represent", "--skip-e5", "--force"),
-    ("label-eval",),
-    ("store", "--force"),
-    ("analyze",),
-    ("viz",),
-    ("report",),
-)
-
+def _build_demo_steps(
+    config_path: Path,
+    demo_dir: Path,
+) -> tuple[tuple[str, ...], ...]:
+    """Return the ordered CLI calls for an isolated synthetic-only run."""
+    config_arg = str(config_path)
+    return (
+        (
+            "synth",
+            "--n",
+            "200",
+            "--output",
+            str(demo_dir / "bronze" / "synthetic.jsonl"),
+            "--config",
+            config_arg,
+        ),
+        ("preprocess", "--config", config_arg, "--force"),
+        ("represent", "--config", config_arg, "--skip-e5", "--force"),
+        (
+            "label-eval",
+            "--config",
+            config_arg,
+            "--labels",
+            str(demo_dir / "labels" / "no_human_labels_for_demo.csv"),
+        ),
+        ("store", "--config", config_arg, "--force"),
+        ("analyze", "--config", config_arg),
+        ("viz", "--config", config_arg),
+        ("report", "--config", config_arg),
+    )
 
 def _print_demo_top_terms(metrics_path: Path, *, limit: int = 15) -> None:
     """Print top terms used by F06 from the most recent analysis metrics."""
@@ -736,8 +763,27 @@ def demo_command() -> None:
     """Run the offline 200-post synthetic pipeline and print elapsed times."""
     configure_logging()
     started = time.perf_counter()
-    typer.echo("fbpipe demo: 200 synthetic posts; E5 skipped; no live crawling.")
-    for args in _DEMO_STEPS:
+    demo_dir = Path("data/demo")
+    shutil.rmtree(demo_dir, ignore_errors=True)
+    config_path = Path("data/demo-config.yaml")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_config = yaml.safe_load(
+        Path("configs/default.yaml").read_text(encoding="utf-8")
+    )
+    raw_config["project"]["data_dir"] = str(demo_dir)
+    raw_config["storage"]["sqlite_url"] = f"sqlite:///{demo_dir.as_posix()}/fbpipe.db"
+    raw_config["storage"]["parquet_path"] = str(
+        demo_dir / "store" / "documents.parquet"
+    )
+    config_path.write_text(
+        yaml.safe_dump(raw_config, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    typer.echo(
+        "fbpipe demo: 200 synthetic posts; E5 skipped; no live crawling. "
+        "Only data/demo is reset."
+    )
+    for args in _build_demo_steps(config_path, demo_dir):
         stage_started = time.perf_counter()
         elapsed = stage_started - started
         remaining = 90.0 - elapsed
@@ -768,7 +814,7 @@ def demo_command() -> None:
         typer.echo(f"[demo] step elapsed: {time.perf_counter() - stage_started:.2f}s")
 
     try:
-        _print_demo_top_terms(Path("data/metrics/analyze.json"))
+        _print_demo_top_terms(Path("data/demo/metrics/analyze.json"))
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=5) from exc
