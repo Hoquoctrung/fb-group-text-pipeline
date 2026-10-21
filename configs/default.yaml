@@ -1,0 +1,56 @@
+project:
+  seed: 42
+  data_dir: data
+
+group:
+  id: "230048322891238"
+  url: "https://www.facebook.com/groups/230048322891238"
+  language_hint: auto
+
+compliance:
+  acknowledged: false
+  max_posts_per_session: 300
+  max_session_minutes: 40
+  delay_seconds: [3.0, 8.0]
+  collect_comments: false
+  max_comments_per_post: 0
+
+privacy:
+  hash_authors: true
+  scrub_pii_in_text: true
+
+collect:
+  adapter: playwright
+  headless: false
+  sort: recent
+  stop_after_empty_scrolls: 6
+
+preprocess:
+  segmenter: underthesea
+  keep_cased_copy: true
+  collapse_repeats_to: 2
+  min_tokens: 3
+  dedup:
+    method: minhash
+    threshold: 0.85
+    shingle: 3
+  english_morph:
+    stemmer: snowball
+    lemmatizer: wordnet
+
+represent:
+  bow:
+    min_df: 3
+    max_df: 0.8
+    ngram: [1, 2]
+  tfidf:
+    sublinear_tf: true
+    ngram: [1, 2]
+  transformer:
+    model: intfloat/multilingual-e5-small
+    batch_size: 64
+    prefix: "query: "
+
+storage:
+  sqlite_url: sqlite:///data/fbpipe.db
+  parquet_dir: data/silver

@@ -1,0 +1,95 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fb-group-text-pipeline"
+version = "0.1.0"
+description = "A reproducible text-processing pipeline for authorized Facebook group data."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "pydantic>=2,<3",
+    "pyyaml>=6,<7",
+    "typer>=0.12,<1",
+    "python-dotenv>=1,<2",
+]
+
+[project.optional-dependencies]
+crawl = ["playwright>=1.45,<2"]
+nlp = [
+    "underthesea>=6,<7",
+    "pyvi>=0.1,<1",
+    "nltk>=3.8,<4",
+    "emoji>=2,<3",
+    "lingua-language-detector>=2,<3",
+    "datasketch>=1.6,<2",
+]
+embed = ["sentence-transformers>=3,<6", "umap-learn>=0.5,<1", "hdbscan>=0.8,<1"]
+store = ["sqlalchemy>=2,<3", "duckdb>=1,<2", "pandas>=2,<3", "pyarrow>=16,<20"]
+viz = ["matplotlib>=3.8,<4", "plotly>=5,<7", "wordcloud>=1.9,<2", "jinja2>=3,<4", "kaleido>=0.2,<1"]
+dev = [
+    "pytest>=8,<9",
+    "pytest-cov>=5,<7",
+    "ruff>=0.6,<1",
+    "mypy>=1.10,<2",
+    "pre-commit>=3,<5",
+]
+all = [
+    "playwright>=1.45,<2",
+    "underthesea>=6,<7",
+    "pyvi>=0.1,<1",
+    "nltk>=3.8,<4",
+    "emoji>=2,<3",
+    "lingua-language-detector>=2,<3",
+    "datasketch>=1.6,<2",
+    "sentence-transformers>=3,<6",
+    "umap-learn>=0.5,<1",
+    "hdbscan>=0.8,<1",
+    "sqlalchemy>=2,<3",
+    "duckdb>=1,<2",
+    "pandas>=2,<3",
+    "pyarrow>=16,<20",
+    "matplotlib>=3.8,<4",
+    "plotly>=5,<7",
+    "wordcloud>=1.9,<2",
+    "jinja2>=3,<4",
+    "kaleido>=0.2,<1",
+    "pytest>=8,<9",
+    "pytest-cov>=5,<7",
+    "ruff>=0.6,<1",
+    "mypy>=1.10,<2",
+    "pre-commit>=3,<5",
+]
+
+[project.scripts]
+fbpipe = "fbpipe.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires external services or browser access",
+    "slow: long-running tests",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"src/fbpipe/cli.py" = ["B008"]

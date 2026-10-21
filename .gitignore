@@ -1,0 +1,40 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets and authenticated browser state
+.env
+.auth/
+*.pem
+*.key
+
+# Data and generated artifacts
+/data/*
+!/data/sample/
+!/data/sample/**
+*.parquet
+*.npz
+*.npy
+*.sqlite
+models/
+.cache/
+debug/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Coverage and build
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Generated reports
