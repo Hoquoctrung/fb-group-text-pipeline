@@ -51,6 +51,7 @@ def test_represent_help_documents_optional_e5() -> None:
     assert "--skip-e5" in output, output
     assert "--force" in output, output
 
+
 def test_demo_runs_all_offline_stages_and_prints_f06_terms(
     tmp_path,
     monkeypatch,
@@ -69,9 +70,7 @@ def test_demo_runs_all_offline_stages_and_prints_f06_terms(
                 json.dumps(
                     {
                         "top_tf_terms": [{"term": "người", "count": 7}],
-                        "top_tfidf_terms": [
-                            {"term": "thông_tin", "mean_tfidf": 0.25}
-                        ],
+                        "top_tfidf_terms": [{"term": "thông_tin", "mean_tfidf": 0.25}],
                     },
                     ensure_ascii=False,
                 ),
@@ -110,4 +109,3 @@ def test_demo_runs_all_offline_stages_and_prints_f06_terms(
     assert "người: 7" in result.output
     assert "thông_tin: 0.25" in result.output
     assert "target: under 90s" in result.output
-
