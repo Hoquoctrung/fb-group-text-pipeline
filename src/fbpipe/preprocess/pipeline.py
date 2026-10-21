@@ -78,16 +78,11 @@ class PreprocessResult:
 def _token_quality_metrics(docs: list[dict[str, Any]]) -> dict[str, Any]:
     """Measure one-character tokens and flag suspiciously high ratios."""
     tokens = [
-        str(token)
-        for doc in docs
-        for token in (doc.get("tokens") or [])
-        if str(token)
+        str(token) for doc in docs for token in (doc.get("tokens") or []) if str(token)
     ]
     total_tokens = len(tokens)
     single_character_tokens = sum(len(token) == 1 for token in tokens)
-    ratio = (
-        round(single_character_tokens / total_tokens, 6) if total_tokens else 0.0
-    )
+    ratio = round(single_character_tokens / total_tokens, 6) if total_tokens else 0.0
     quality_warnings: list[str] = []
     threshold = 0.10
     if ratio > threshold:
