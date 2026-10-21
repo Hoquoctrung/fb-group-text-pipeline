@@ -60,9 +60,9 @@ Lộ trình hợp lý là: (1) kiểm tra thủ công F06 và tỷ lệ token m�
 ## Trạng thái triển khai
 
 - Import/Synthetic: chạy offline; Playwright/GraphQL chưa được xác minh bằng mẫu phản hồi Facebook thật.
-- Preprocess S0–S11: đã có mã và test.
-- Represent/label/store: mã và unit tests đã được thêm; cần chạy lại toàn bộ Ruff/pre-commit, Parquet integration, E5 (nếu cài model) và benchmark trên máy phát triển.
-- Các biểu đồ F01/F03/F06/F07/F09/F10/F11/F13/F14/F15 chưa được sinh trong Phase 3–4 rút gọn này; thuộc phần Viz sau.
+- Preprocess S0–S11: đã có mã, test hồi quy tiếng Việt và metric `token_quality` (tỷ lệ token một ký tự; cảnh báo khi vượt 10%).
+- Represent/label/store: BoW/TF-IDF, nhãn proxy, SQLite/FTS5 và Parquet có mã; E5 là tùy chọn và bị bỏ qua trong demo offline.
+- F01/F03/F06/F07/F09/F10/F11/F13/F14/F15 được sinh bởi `fbpipe demo`. Cần duyệt hình vừa sinh và top 15 F06; hình được tạo trên runner CI không tự cập nhật các PNG đã commit trong repository.
 
 ## Nhận định tổng kết
 
