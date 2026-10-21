@@ -29,3 +29,11 @@ jobs:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
         run: pytest -m "not integration and not slow" -q
+
+      - name: Offline end-to-end demo from clean data
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: |
+          rm -rf data
+          fbpipe demo

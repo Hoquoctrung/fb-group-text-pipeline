@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -689,6 +692,84 @@ def bench_storage_command(
         f"({iterations} iterations) -> {output_path}; "
         f"SQLite FTS5 + Parquet. Clones are marked in metrics."
     )
+
+
+
+@app.command("demo")
+def demo_command() -> None:
+    """Run the seven-stage offline demo on 200 synthetic documents."""
+    stages: list[tuple[str, list[str]]] = [
+        (
+            "synth",
+            [
+                "synth",
+                "--n",
+                "200",
+                "--output",
+                "data/bronze/demo/synthetic.jsonl",
+            ],
+        ),
+        (
+            "preprocess",
+            ["preprocess", "--input-dir", "data/bronze/demo", "--force"],
+        ),
+        ("represent", ["represent", "--skip-e5", "--force"]),
+        ("store", ["store", "--force"]),
+        ("analyze", ["analyze"]),
+        ("viz", ["viz"]),
+        ("report", ["report"]),
+    ]
+    env = {
+        **os.environ,
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+    }
+    started = time.perf_counter()
+    typer.echo("Offline demo: 200 synthetic posts; E5 disabled; target < 90 seconds.")
+
+    for stage_name, args in stages:
+        elapsed_before = time.perf_counter() - started
+        remaining = 90.0 - elapsed_before
+        if remaining <= 0:
+            typer.echo(
+                f"[demo] FAILED before {stage_name}: exceeded the 90-second budget.",
+                err=True,
+            )
+            raise typer.Exit(code=5)
+
+        stage_started = time.perf_counter()
+        typer.echo(f"[demo] START {stage_name}")
+        command = [sys.executable, "-m", "fbpipe.cli", *args]
+        try:
+            subprocess.run(command, check=True, env=env, timeout=remaining)
+        except subprocess.TimeoutExpired as exc:
+            typer.echo(
+                f"[demo] FAILED {stage_name}: reached the 90-second time budget.",
+                err=True,
+            )
+            raise typer.Exit(code=5) from exc
+        except subprocess.CalledProcessError as exc:
+            typer.echo(
+                f"[demo] FAILED {stage_name} after "
+                f"{time.perf_counter() - stage_started:.2f}s "
+                f"(exit={exc.returncode}).",
+                err=True,
+            )
+            raise typer.Exit(code=exc.returncode or 1) from exc
+
+        typer.echo(
+            f"[demo] OK {stage_name}: "
+            f"{time.perf_counter() - stage_started:.2f}s"
+        )
+
+    total = time.perf_counter() - started
+    if total >= 90:
+        typer.echo(
+            f"[demo] FAILED: finished in {total:.2f}s; required < 90 seconds.",
+            err=True,
+        )
+        raise typer.Exit(code=5)
+    typer.echo(f"[demo] COMPLETED in {total:.2f}s (target < 90 seconds).")
 
 
 @app.command("validate")

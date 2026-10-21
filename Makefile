@@ -23,5 +23,4 @@ check:
 	pytest -m "not integration and not slow" -q
 
 demo:
-	fbpipe synth --n 200
-	fbpipe validate data/bronze/synthetic.jsonl
+	fbpipe demo

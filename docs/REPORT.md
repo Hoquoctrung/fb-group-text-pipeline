@@ -1,4 +1,4 @@
-# Báo cáo — khung Phase 0 đến Phase 4
+# Báo cáo — FB Group Text Pipeline (phạm vi rút gọn Phase 0–6)
 
 > Không điền số liệu giả. Mọi số đo biểu diễn và lưu trữ phải lấy từ file metrics sinh bởi CLI. Phần **Nhận định** để Trung tự viết sau khi xem dữ liệu được phép sử dụng.
 
@@ -37,10 +37,36 @@
 
 ## Trạng thái triển khai
 
-- Import/Synthetic: chạy offline; Playwright/GraphQL chưa được xác minh bằng mẫu phản hồi Facebook thật.
-- Preprocess S0–S11: đã có mã và test.
-- Represent/label/store: mã và unit tests đã được thêm; cần chạy lại toàn bộ Ruff/pre-commit, Parquet integration, E5 (nếu cài model) và benchmark trên máy phát triển.
-- Các biểu đồ F01/F03/F06/F07/F09/F10/F11/F13/F14/F15 chưa được sinh trong Phase 3–4 rút gọn này; thuộc phần Viz sau.
+- **Import/Synthetic:** có đường nhập CSV/JSONL và sinh dữ liệu synthetic offline. `PlaywrightCollector` có mã tối thiểu nhưng crawl live và schema GraphQL thật chưa được xác minh.
+- **Preprocess S0–S11:** được triển khai và có unit tests; số liệu phải đọc từ metrics của lượt chạy hiện tại, không lấy số liệu synthetic làm bằng chứng về nhóm thật.
+- **Represent/Store:** BoW, TF-IDF, E5 tùy chọn, SQLite+FTS5 và Parquet có code. Demo chuẩn dùng `--skip-e5` để không tải model. Đánh giá nhãn chỉ được coi là ground truth khi có nhãn người gán và kiểm tra.
+- **Analyze/Viz/Report:** CLI tạo 10 hình tĩnh F01/F03/F06/F07/F09/F10/F11/F13/F14/F15 và sinh `docs/REPORT_generated.md`; dashboard Streamlit không triển khai.
+- **CI:** kiểm tra Ruff, format, bộ unit tests offline và smoke test `fbpipe demo` sau khi xóa `data/`. Lấy trạng thái cuối cùng từ tab Actions, không suy ra CI xanh chỉ từ test cục bộ.
+
+## Nguồn dữ liệu & giới hạn
+
+- Quy trình demo mặc định sinh **200 bản ghi synthetic** bằng seed cố định. Đây là dữ liệu mô phỏng để kiểm tra pipeline, không phải bài đăng Facebook thật. Demo preprocess thư mục `data/bronze/demo/` riêng, tránh trộn các file Bronze khác vào mẫu demo.
+- Khi có dữ liệu import được phép, lấy **N bài import** từ `source_counts` trong `data/metrics/analyze.json` sau khi chạy lại pipeline; ghi nguồn và phạm vi thu thập thực tế. Không lấy `N` từ tên file hoặc số dòng benchmark.
+- **Crawl live chưa xác minh**: chưa có bằng chứng về tỷ lệ parse thành công trên response GraphQL thật đã ẩn danh. Fixture tự dựng không chứng minh crawler hoạt động trên Facebook.
+- **Nhãn:** hiện chưa có bộ nhãn tay được cung cấp để khẳng định hiệu năng phân loại. Khi đánh giá dùng nhãn yếu theo luật, metrics phải ghi `proxy_labels=true`; không gọi đây là ground truth.
+- **Benchmark:** mốc 1.000 bản ghi là bootstrap/clone có nhiễu từ Silver với ID mới, không phải 1.000 bài độc lập. Đây chỉ là phép đo kỹ thuật trên dữ liệu mô phỏng.
+- Chỉ công bố các hình/bảng sau khi rà soát để bảo đảm không lộ PII; không đưa dữ liệu thật, cookies, token, `.env` hoặc `.auth/` lên GitHub.
+
+## Hạn chế & hướng phát triển
+
+Các công nghệ trong bảng dưới là so sánh lý thuyết để định hướng, không phải kết quả benchmark thực nghiệm của triển khai hiện tại.
+
+| Công nghệ | Vai trò / điểm mạnh về lý thuyết | Hạn chế / chi phí cần cân nhắc | Trạng thái dự án |
+|---|---|---|---|
+| SQLite + FTS5 | Database quan hệ cục bộ, giao dịch và full-text search trong một file | Một node; ghi đồng thời và quy mô lớn có giới hạn | **Đã triển khai** |
+| Parquet | Định dạng cột, nén tốt, quét phân tích theo cột | Không tự cung cấp full-text index hoặc giao dịch kiểu DB | **Đã triển khai** |
+| MongoDB | Tài liệu JSON linh hoạt, phù hợp dữ liệu lồng nhau | Cần vận hành service, index và quản trị quyền/backup | **Chỉ mô tả lý thuyết — không triển khai** |
+| Elasticsearch | BM25, analyzers, highlight; có thể hỗ trợ tìm kiếm vector tùy cấu hình | Chi phí RAM/vận hành; analyzer tiếng Việt cần đánh giá riêng | **Chỉ mô tả lý thuyết — không triển khai** |
+| Big Data (HDFS/S3, Delta/Iceberg, DuckDB) | Lưu trữ phân tán hoặc truy vấn cột ở quy mô lớn | Phức tạp hơn và có chi phí vận hành; DuckDB cũng chưa được tích hợp trong bản rút gọn | **Chỉ mô tả lý thuyết — không triển khai** |
+| fastText | Embedding từ hiệu quả, biểu diễn subword hữu ích với từ hiếm/biến thể | Cần huấn luyện/chọn corpus và đánh giá theo miền dữ liệu | **Chỉ mô tả lý thuyết — không triển khai** |
+| PhoBERT | Transformer tiền huấn luyện tiếng Việt, có ngữ cảnh câu | Nặng hơn BoW/TF-IDF; cần tokenizer, tài nguyên và đánh giá nhãn đáng tin cậy | **Chỉ mô tả lý thuyết — không triển khai** |
+
+**Hướng phát triển có điều kiện:** (1) xin phép và xác minh mẫu live đã ẩn danh trước khi đánh giá parser; (2) gán nhãn tay và đo agreement trước khi công bố F1; (3) bổ sung các ablation và hình còn thiếu nếu rubric yêu cầu; (4) chỉ triển khai MongoDB/Elasticsearch/Big Data hoặc mô hình embedding khác khi có câu hỏi đo lường và ngân sách phù hợp. Không mô tả các mục này như tính năng hiện có.
 
 ## Nhận định tổng kết
 
