@@ -78,6 +78,12 @@ def test_demo_runs_all_offline_stages_and_prints_f06_terms(
                 encoding="utf-8",
             )
 
+    default_config_content = Path("configs/default.yaml").read_text(encoding="utf-8")
+    (tmp_path / "configs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "configs" / "default.yaml").write_text(
+        default_config_content, encoding="utf-8"
+    )
+
     existing_import = tmp_path / "data" / "bronze" / "my_import.jsonl"
     existing_import.parent.mkdir(parents=True, exist_ok=True)
     existing_import.write_text("{}\n", encoding="utf-8")
