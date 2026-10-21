@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from typing import Any
 import pytest
 
 from fbpipe.collect.synthetic import SyntheticCollector
-from fbpipe.preprocess.pipeline import preprocess_corpus
+from fbpipe.preprocess.pipeline import _token_quality_metrics, preprocess_corpus
 from fbpipe.preprocess.steps import build_transforms
 
 RESOURCES = Path("resources")
@@ -137,6 +138,112 @@ def test_transform_input_output_table(
     assert input_doc == original_doc
 
 
+
+def _run_full_preprocess_text(text: str) -> dict[str, Any]:
+    transforms, _ = build_transforms(
+        RESOURCES,
+        english_words=set(),
+        load_english_reference=False,
+    )
+    doc: dict[str, Any] = {
+        "doc_id": "unicode-regression",
+        "text_raw": text,
+        "text_clean": text,
+    }
+    for transform in transforms:
+        doc = transform.apply(doc)
+    return doc
+
+
+@pytest.mark.parametrize(
+    ("raw_text", "expected_clean", "required_tokens", "compound_options"),
+    [
+        pytest.param(
+            "Chia sẻ thông tin về mọi người",
+            "chia sẻ thông tin về mọi người",
+            ("người", "về"),
+            (
+                (("thông_tin",), ("thông", "tin")),
+                (("chia_sẻ",), ("chia", "sẻ")),
+            ),
+            id="vietnamese-words-and-compounds",
+        ),
+        pytest.param(
+            "Việt Nam đẹp quá 😍 !!!",
+            "việt nam đẹp quá !",
+            ("việt", "nam", "đẹp", "quá"),
+            (),
+            id="vietnamese-diacritics-emoji-punctuation",
+        ),
+        pytest.param(
+            "liên hệ 0901234567 hoặc a@b.com",
+            "liên hệ <phone> hoặc <email>",
+            ("liên", "hệ", "hoặc", "<phone>", "<email>"),
+            (),
+            id="pii-redaction-keeps-vietnamese",
+        ),
+    ],
+)
+def test_full_preprocess_preserves_vietnamese_words(
+    raw_text: str,
+    expected_clean: str,
+    required_tokens: tuple[str, ...],
+    compound_options: tuple[tuple[tuple[str, ...], ...], ...],
+) -> None:
+    doc = _run_full_preprocess_text(raw_text)
+
+    assert doc["text_clean"] == expected_clean
+    tokens = set(doc["tokens"])
+    assert set(required_tokens).issubset(tokens)
+    for alternatives in compound_options:
+        assert any(set(option).issubset(tokens) for option in alternatives)
+
+    if "0901234567" in raw_text:
+        assert "0901234567" not in doc["text_clean"]
+        assert "a@b.com" not in doc["text_clean"]
+
+
+def test_s1_to_s7_do_not_split_vietnamese_phrase() -> None:
+    phrase = "chia sẻ thông tin về mọi người"
+    transforms, _ = build_transforms(
+        RESOURCES,
+        english_words=set(),
+        load_english_reference=False,
+    )
+    doc = {"text_raw": phrase, "text_clean": phrase}
+
+    for transform in transforms[1:8]:
+        doc = transform.apply(doc)
+        assert doc["text_clean"] == phrase, transform.name
+
+
+def test_token_quality_metrics_warn_above_ten_percent(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.WARNING, logger="fbpipe.preprocess.pipeline")
+    metrics = _token_quality_metrics(
+        [{"tokens": ["a", "v", "người", "thông_tin"]}]
+    )
+
+    assert metrics["total_tokens"] == 4
+    assert metrics["single_character_tokens"] == 2
+    assert metrics["single_character_token_ratio"] == 0.5
+    assert metrics["warning_threshold_ratio"] == 0.10
+    assert len(metrics["warnings"]) == 1
+    assert "above the 10% threshold" in caplog.text
+
+
+def test_token_quality_metrics_does_not_warn_at_ten_percent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="fbpipe.preprocess.pipeline")
+    metrics = _token_quality_metrics(
+        [{"tokens": ["a", "người", "thông", "tin", "chia", "sẻ", "về", "mọi", "người", "việt"]}]
+    )
+
+    assert metrics["single_character_token_ratio"] == 0.1
+    assert metrics["warnings"] == []
+    assert "Text quality warning" not in caplog.text
+
+
 def test_s3_replaces_pii_and_keeps_hashtag_text() -> None:
     result = _transform_by_name("S3").apply(
         {
@@ -229,6 +336,12 @@ def test_preprocess_writes_parquet_and_metrics(tmp_path: Path) -> None:
     metrics = json.loads(result.metrics_path.read_text(encoding="utf-8"))
     assert len(metrics["ablation"]) == 3
     assert metrics["n_raw"] == 4
+    assert metrics["token_quality"]["total_tokens"] > 0
+    assert 0.0 <= metrics["token_quality"]["single_character_token_ratio"] <= 1.0
+    assert bool(metrics["token_quality"]["warnings"]) == (
+        metrics["token_quality"]["single_character_token_ratio"]
+        > metrics["token_quality"]["warning_threshold_ratio"]
+    )
 
 
 def test_preprocess_refuses_missing_bronze_input(tmp_path: Path) -> None:
