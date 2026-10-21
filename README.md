@@ -23,9 +23,9 @@ flowchart TD
     H --> J
     I --> J
     J --> K["docs/REPORT_generated.md"]
-    N["MongoDB / Elasticsearch / Streamlit: không triển khai"]:::note
-    classDef note fill:#f4f4f4,stroke:#888,color:#333,stroke-dasharray: 4 3
 ~~~
+
+**Ghi chú phạm vi:** MongoDB, Elasticsearch và Streamlit **không triển khai**.
 
 ## Quickstart
 
