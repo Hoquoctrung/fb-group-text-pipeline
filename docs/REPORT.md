@@ -35,6 +35,28 @@
 
 **Nhận định — Trung tự viết:** Dựa trên số liệu latency, throughput và kích thước trong JSON metrics để giải thích vì sao SQLite/Parquet đủ dùng ở quy mô hiện tại và khi nào cần backend khác.
 
+
+## Nguồn dữ liệu & giới hạn
+
+- **Nguồn trong demo**: SyntheticCollector tạo 200 bản ghi synthetic và gắn provenance là `source=synthetic`. Đây là dữ liệu kiểm thử, không phải bài đăng lấy từ Facebook.
+- Nếu thay bằng dữ liệu nhập, báo cáo phải ghi đúng N bản ghi theo `data/metrics/import.json` và số bản ghi hợp lệ/không hợp lệ trong `data/metrics/preprocess.json`; không gán nguồn Facebook khi provenance không chứng minh điều đó.
+- **Nhãn**: khi chưa có nhãn tay, label-eval dùng nhãn proxy theo luật (`proxy_labels=true`). Điểm số chỉ có ý nghĩa chẩn đoán, không phải ground truth.
+- **Crawl live chưa xác minh**: chưa có bằng chứng end-to-end từ phiên Facebook được phép và phản hồi thật đã ẩn danh; fixture tự dựng không chứng minh collector/parser hoạt động với dữ liệu live.
+- **Benchmark 1k**: bản benchmark tạo các dòng clone có nhiễu/ID mới từ Silver. 1.000 dòng benchmark không đồng nghĩa 1.000 bài độc lập.
+
+## Hạn chế & hướng phát triển
+
+| Thành phần | Ý tưởng lý thuyết / trường hợp phù hợp | Lợi ích kỳ vọng | Hạn chế / trạng thái |
+|---|---|---|---|
+| MongoDB | NoSQL dạng document, hợp với schema lồng như bài + bình luận | Linh hoạt schema, mở rộng theo cụm tùy kiến trúc | **Không triển khai**; cần service, index và contract tests |
+| Elasticsearch | Inverted index/BM25 cho tìm kiếm toàn văn; có thể ghép vector search | Tìm kiếm và phân tích truy vấn mạnh hơn FTS5 ở nhu cầu phù hợp | **Không triển khai**; analyzer tiếng Việt cần thiết kế/đánh giá riêng |
+| Big Data (HDFS/S3 + Parquet/Delta/Iceberg) | Lưu trữ phân tán dạng cột cho dữ liệu lớn và xử lý batch | Nén, partition, scale-out và xử lý theo lô | **Không triển khai**; hiện tại chỉ dùng Parquet cục bộ, chưa có hệ thống phân tán |
+| fastText | Embedding subword huấn luyện từ corpus nội miền | Có thể tạo vector từ và giảm vấn đề từ ngoài từ vựng | **Không triển khai**; corpus synthetic/nhỏ không đủ để kết luận chất lượng |
+| PhoBERT | Transformer tiền huấn luyện cho tiếng Việt; thường cần đầu vào đã tách từ theo định dạng mô hình | Biểu diễn ngữ cảnh tiếng Việt | **Không triển khai**; chi phí tài nguyên và đánh giá nhãn tay chưa được thực hiện |
+
+Lộ trình hợp lý là: (1) kiểm tra thủ công F06 và tỷ lệ token một ký tự; (2) xây tập nhãn tay được phép sử dụng và báo macro-F1 trên nhãn thật tách biệt nhãn proxy; (3) xác minh collector bằng mẫu phản hồi live đã ẩn danh, nếu có quyền; (4) chỉ sau khi workload yêu cầu mới benchmark một backend tìm kiếm/NoSQL hoặc kiến trúc Big Data thực sự.
+
+
 ## Trạng thái triển khai
 
 - Import/Synthetic: chạy offline; Playwright/GraphQL chưa được xác minh bằng mẫu phản hồi Facebook thật.
