@@ -65,6 +65,8 @@ class AppConfig(BaseModel):
     privacy: PrivacyConfig = Field(default_factory=PrivacyConfig)
     collect: CollectConfig = Field(default_factory=CollectConfig)
     preprocess: dict[str, Any] = Field(default_factory=dict)
+    represent: dict[str, Any] = Field(default_factory=dict)
+    storage: dict[str, Any] = Field(default_factory=dict)
 
 
 def load_config(path: str | Path) -> AppConfig:

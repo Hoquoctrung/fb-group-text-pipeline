@@ -1,0 +1,25 @@
+"""CLI surface tests for Phase 3 and Phase 4 commands."""
+
+from typer.testing import CliRunner
+
+from fbpipe.cli import app
+
+
+def test_phase_3_and_4_commands_are_registered() -> None:
+    result = CliRunner().invoke(app, ["--help"])
+    assert result.exit_code == 0, result.output
+    for command in (
+        "represent",
+        "label-sample",
+        "label-eval",
+        "store",
+        "bench-storage",
+    ):
+        assert command in result.output
+
+
+def test_represent_help_documents_optional_e5() -> None:
+    result = CliRunner().invoke(app, ["represent", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--skip-e5" in result.output
+    assert "--force" in result.output

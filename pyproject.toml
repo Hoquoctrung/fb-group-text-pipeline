@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv>=1,<2",
     "pandas>=2,<3",
     "pyarrow>=16,<20",
+    "scikit-learn>=1.4,<2",
 ]
 
 [project.optional-dependencies]
@@ -29,8 +30,7 @@ nlp = [
     "lingua-language-detector>=2,<3",
     "datasketch>=1.6,<2",
 ]
-embed = ["sentence-transformers>=3,<6", "umap-learn>=0.5,<1", "hdbscan>=0.8,<1"]
-store = ["sqlalchemy>=2,<3", "duckdb>=1,<2"]
+embed = ["sentence-transformers>=3,<6"]
 viz = ["matplotlib>=3.8,<4", "plotly>=5,<7", "wordcloud>=1.9,<2", "jinja2>=3,<4", "kaleido>=0.2,<1"]
 dev = [
     "pytest>=8,<9",
@@ -48,10 +48,6 @@ all = [
     "lingua-language-detector>=2,<3",
     "datasketch>=1.6,<2",
     "sentence-transformers>=3,<6",
-    "umap-learn>=0.5,<1",
-    "hdbscan>=0.8,<1",
-    "sqlalchemy>=2,<3",
-    "duckdb>=1,<2",
     "pandas>=2,<3",
     "pyarrow>=16,<20",
     "matplotlib>=3.8,<4",
