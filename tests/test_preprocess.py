@@ -138,7 +138,6 @@ def test_transform_input_output_table(
     assert input_doc == original_doc
 
 
-
 def _run_full_preprocess_text(text: str) -> dict[str, Any]:
     transforms, _ = build_transforms(
         RESOURCES,
@@ -221,9 +220,7 @@ def test_token_quality_metrics_warn_above_ten_percent(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.WARNING, logger="fbpipe.preprocess.pipeline")
-    metrics = _token_quality_metrics(
-        [{"tokens": ["a", "v", "người", "thông_tin"]}]
-    )
+    metrics = _token_quality_metrics([{"tokens": ["a", "v", "người", "thông_tin"]}])
 
     assert metrics["total_tokens"] == 4
     assert metrics["single_character_tokens"] == 2
@@ -238,10 +235,22 @@ def test_token_quality_metrics_does_not_warn_at_ten_percent(
 ) -> None:
     caplog.set_level(logging.WARNING, logger="fbpipe.preprocess.pipeline")
     metrics = _token_quality_metrics(
-        [{"tokens": [
-            "a", "người", "thông", "tin", "chia",
-            "sẻ", "về", "mọi", "người", "việt",
-        ]}]
+        [
+            {
+                "tokens": [
+                    "a",
+                    "người",
+                    "thông",
+                    "tin",
+                    "chia",
+                    "sẻ",
+                    "về",
+                    "mọi",
+                    "người",
+                    "việt",
+                ]
+            }
+        ]
     )
 
     assert metrics["single_character_token_ratio"] == 0.1
