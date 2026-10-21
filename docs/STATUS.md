@@ -1,6 +1,6 @@
 # Trạng thái dự án — Phase 0 đến Phase 4 (phạm vi rút gọn)
 
-**Cập nhật:** 2026-10-21  
+**Cập nhật:** 2026-10-21
 **Phạm vi:** `docs/SPEC.md` §0, §0b và các DoD Phase 0–4 trong phạm vi rút gọn. Phase 2 dùng ablation 3 cấu hình; Phase 3–4 chỉ triển khai BoW/TF-IDF/E5 tùy chọn, labeling, SQLite/FTS5, Parquet và benchmark 1k.
 
 > Báo cáo này chỉ ghi nhận những gì đã có bằng chứng từ output Terminal, danh sách file Git và ảnh GitHub Actions do người phát triển cung cấp. “Đã có code” không đồng nghĩa với “đã kiểm thử end-to-end”. Không dùng synthetic làm kết quả nghiên cứu thực tế.
