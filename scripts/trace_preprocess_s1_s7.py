@@ -14,8 +14,9 @@ def main() -> None:
         english_words=set(),
         load_english_reference=False,
     )
-    doc: dict[str, Any] = {"text_raw": TEXT, "text_clean": TEXT}
     for transform in transforms[1:8]:
+        # Give every transform the same original input to isolate its behavior.
+        doc: dict[str, Any] = {"text_raw": TEXT, "text_clean": TEXT}
         doc = transform.apply(doc)
         print(f"{transform.name}: {doc['text_clean']!r}")
 
