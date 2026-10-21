@@ -21,7 +21,15 @@ def test_phase_3_and_4_commands_are_registered() -> None:
 
 
 def test_represent_help_documents_optional_e5() -> None:
-    result = CliRunner().invoke(app, ["represent", "--help"])
+    result = CliRunner().invoke(
+        app,
+        ["represent", "--help"],
+        env={
+            "COLUMNS": "160",
+            "TERMINAL_WIDTH": "160",
+            "NO_COLOR": "1",
+        },
+    )
     assert result.exit_code == 0, result.output
     assert "--skip-e5" in result.output
     assert "--force" in result.output

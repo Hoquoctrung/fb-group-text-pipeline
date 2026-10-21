@@ -454,7 +454,9 @@ def represent_command(
     input_path: Path | None = typer.Option(None, "--input"),
     output_dir: Path | None = typer.Option(None, "--output-dir"),
     skip_e5: bool = typer.Option(
-        False, "--skip-e5", help="Skip the optional E5 model."
+        False,
+        "--skip-e5",
+        help="Skip the optional E5 model.",
     ),
     force: bool = typer.Option(False, "--force"),
 ) -> None:
