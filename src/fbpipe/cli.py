@@ -704,7 +704,6 @@ def bench_storage_command(
 
 
 
-
 def _build_demo_steps(
     config_path: Path,
     demo_dir: Path,
@@ -735,7 +734,6 @@ def _build_demo_steps(
         ("viz", "--config", config_arg),
         ("report", "--config", config_arg),
     )
-
 
 
 def _print_demo_top_terms(metrics_path: Path, *, limit: int = 15) -> None:
