@@ -82,10 +82,11 @@ def _token_quality_metrics(docs: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     total_tokens = len(tokens)
     single_character_tokens = sum(len(token) == 1 for token in tokens)
-    ratio = round(single_character_tokens / total_tokens, 6) if total_tokens else 0.0
+    raw_ratio = single_character_tokens / total_tokens if total_tokens else 0.0
+    ratio = round(raw_ratio, 6)
     quality_warnings: list[str] = []
     threshold = 0.10
-    if ratio > threshold:
+    if raw_ratio > threshold:
         message = (
             f"Single-character token ratio is {ratio:.1%}, above the 10% threshold. "
             "Review Unicode-aware tokenization."
