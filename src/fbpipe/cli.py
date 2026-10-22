@@ -702,8 +702,6 @@ def bench_storage_command(
     )
 
 
-
-
 def _build_demo_steps(
     config_path: Path,
     demo_dir: Path,
