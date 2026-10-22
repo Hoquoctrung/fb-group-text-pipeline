@@ -1,69 +1,174 @@
-# Báo cáo — khung Phase 0 đến Phase 4
+Báo cáo đồ án: Pipeline xử lý văn bản từ nhóm Facebook
 
-> Không điền số liệu giả. Mọi số đo biểu diễn và lưu trữ phải lấy từ file metrics sinh bởi CLI. Phần **Nhận định** để Trung tự viết sau khi xem dữ liệu được phép sử dụng.
+Sinh viên: Hồ Quốc Trung
+MSSV: 24521878
+Môn: CS232
+Mã nguồn: https://github.com/Hoquoctrung/fb-group-text-pipeline (tag v1.0)
+Báo cáo số liệu tự động: REPORT_generated.md
 
-> **Báo cáo tự động:** [`REPORT_generated.md`](REPORT_generated.md) — được tạo bằng `fbpipe report`; lệnh không ghi đè tài liệu thủ công này.
+Lưu ý trung thực về dữ liệu: Toàn bộ kết quả trong báo cáo này được đo trên 200 bài viết tổng hợp (synthetic) do SyntheticCollector sinh ra. Chưa thu thập được dữ liệu thật từ nhóm Facebook (xem §7 và §9). Các kết quả vì vậy chứng minh pipeline chạy đúng, không phản ánh nội dung hay hành vi của nhóm thật.
 
-## §2. So sánh 5 kỹ thuật thu thập (Bảng 1)
+Tóm tắt
 
-| Kỹ thuật | Định nghĩa ngắn | Dùng khi | Ưu điểm | Nhược điểm | Hiện thực trong phạm vi 48 giờ |
-|---|---|---|---|---|---|
-| File import | Đọc dataset CSV/JSONL có sẵn | Có dữ liệu được phép sử dụng | Ổn định, nhanh, tái lập | Phụ thuộc nguồn dữ liệu | `ImportCollector` — triển khai |
-| Web scraping | Trích xuất nội dung từ HTML/DOM đã render | Cần dữ liệu hiển thị trên trang | Linh hoạt, không cần API | Dễ vỡ khi UI đổi | Không triển khai DOM parser trong phạm vi tối thiểu |
-| Crawling | Duyệt liên tục qua nội dung với checkpoint và giới hạn tốc độ | Cần thu thập nhiều bài theo feed | Có thể lấy nhiều bản ghi trong phiên | Phụ thuộc trạng thái truy cập/schema | `PlaywrightCollector` tối thiểu — chưa xác minh schema thật |
-| API | Gọi giao diện lập trình chính thức để truy vấn dữ liệu có cấu trúc | Nền tảng cung cấp API và quyền truy cập phù hợp | Dữ liệu có cấu trúc, hợp đồng rõ hơn | Quyền/phạm vi API có thể bị giới hạn hoặc thay đổi | Chỉ mô tả lý thuyết; không demo code API theo §0b |
-| Streaming | Nhận và xử lý dữ liệu liên tục theo thời gian | Bài toán yêu cầu xử lý gần thời gian thực | Độ trễ thấp, xử lý tăng dần | Đòi hỏi vận hành, xử lý sự kiện trễ và trùng | Chỉ mô tả lý thuyết; không có `stream_sim` theo §0b |
+Đồ án xây dựng pipeline xử lý văn bản đầu-cuối gồm 5 giai đoạn: thu thập, tiền xử lý, biểu diễn, lưu trữ, phân tích và trực quan hóa. Pipeline chạy được bằng một chuỗi lệnh CLI (fbpipe), mỗi giai đoạn ghi số liệu vào data/metrics/\*.json và báo cáo tự động được sinh từ các file này. Do giới hạn thời gian (48 giờ) và rủi ro truy cập Facebook, phạm vi được rút gọn có chủ đích (xem §9).
 
-## §4. Biểu diễn văn bản (Bảng 3 — sinh số liệu khi chạy CLI)
+Giai đoạn Kết quả đạt được
+Thu thập ImportCollector, SyntheticCollector, PlaywrightCollector (chưa xác minh live)
+Tiền xử lý Bước S0–S11, ablation 3 cấu hình; 200 bài → 53 bài giữ lại sau lọc trùng/spam/ngắn
+Biểu diễn BoW, TF-IDF, E5 (tùy chọn); đánh giá bằng nhãn proxy
+Lưu trữ SQLite + FTS5, Parquet; benchmark 1.000 bản ghi nhân bản
+Trực quan hóa Các hình F01, F03, F06, F07, F09, F10, F11, F13, F14, F15 (xem §6)
 
-- **BoW:** `CountVectorizer` trên `tokens_nostop`, n-gram (1, 2), đầu ra sparse `.npz` và vocabulary JSON. Số chiều, mật độ/thưa và kích thước artifact nằm trong `data/metrics/represent.json`.
-- **TF-IDF:** `TfidfVectorizer(sublinear_tf=True)` trên cùng trường token đã làm sạch. Công thức khái quát: \(\mathrm{tfidf}(t,d)=\mathrm{tf}(t,d)\times\mathrm{idf}(t)\). Kết quả top-term theo TF và theo TF-IDF cùng nằm trong metrics để so sánh; không điền kết quả trước khi CLI chạy.
-- **E5:** `intfloat/multilingual-e5-small` trên `text_clean`, tiền tố `query: ` và chuẩn hóa L2. Import thư viện và tải model là tùy chọn; nếu lỗi thì BoW/TF-IDF vẫn được lưu, và metrics phải ghi trạng thái E5 bị bỏ qua.
-- **Đánh giá:** `fbpipe label-sample` tạo mẫu phân tầng tại `data/labels/to_label.csv`. Sau khi điền nhãn người, `fbpipe label-eval` tính macro-F1 out-of-fold. Khi chưa có nhãn tay, luật heuristic tạo proxy labels; mọi kết quả có `proxy_labels=true` và không được diễn giải như ground truth.
+1. Kiến trúc và quy trình
+   CollectImport · Synthetic ·Playwright
+   BronzeJSONL
+   PreprocessS0–S11
+   SilverParquet
+   RepresentBoW · TF-IDF · E5
+   Gold.npz / .npy
+   StoreSQLite · Parquet
+   Analyze & Viz
+   Figures ·REPORT_generated.md
+   Giai đoạn Đầu vào Đầu ra Vai trò Công cụ Số đo
+   Collect Nguồn (file / synthetic / web) data/bronze/_.jsonl Đưa dữ liệu về schema RawPost thống nhất, ẩn danh tác giả Pydantic, Playwright số bài, số dòng lỗi
+   Preprocess Bronze data/silver/documents.parquet Làm sạch, chuẩn hóa, tách từ, lọc chất lượng underthesea, NLTK, datasketch funnel, OOV, thời gian từng bước
+   Represent Silver data/gold/ Chuyển văn bản thành vector scikit-learn, sentence-transformers chiều, độ thưa, macro-F1
+   Store Silver data/fbpipe.db, data/store/_.parquet Truy vấn và lưu trữ lâu dài SQLite FTS5, pyarrow thời gian truy vấn
+   Analyze/Viz Silver, Gold, metrics docs/figures/ Quan sát và trình bày kết quả matplotlib, scikit-learn —
 
-**Nhận định — Trung tự viết:** So sánh macro-F1, số chiều, độ thưa, kích thước và thời gian từ `data/metrics/represent.json` + `data/metrics/label_eval.json`. Phân biệt rõ kết quả nhãn tay với kết quả proxy.
+Thiết kế theo mô hình medallion (Bronze → Silver → Gold): mỗi tầng tái tạo được từ tầng trước, mỗi giai đoạn idempotent và ghi metrics riêng. Mẫu Adapter cho Collector giúp các giai đoạn sau không phụ thuộc nguồn dữ liệu, nên khi Facebook chặn truy cập thì pipeline vẫn chạy trên dữ liệu nhập tay hoặc synthetic.
 
-## §5. Lưu trữ (Bảng 4 — sinh số liệu benchmark)
+2. Thu thập dữ liệu
+   Bảng 1. So sánh 5 kỹ thuật thu thập
+   Kỹ thuật Định nghĩa ngắn Dùng khi Ưu điểm Nhược điểm Hiện thực trong đồ án
+   File import Đọc dataset CSV/JSONL có sẵn Có dữ liệu được phép sử dụng Ổn định, nhanh, tái lập Phụ thuộc nguồn dữ liệu ImportCollector (đã chạy, kiểm thử)
+   Web scraping Trích nội dung từ HTML/DOM đã render Cần dữ liệu hiển thị trên trang Linh hoạt, không cần API Dễ vỡ khi UI đổi Không triển khai DOM parser
+   Crawling Duyệt nhiều trang/feed với checkpoint và giới hạn tốc độ Cần nhiều bản ghi Phủ rộng Phụ thuộc schema và trạng thái truy cập PlaywrightCollector tối thiểu, chưa xác minh live
+   API Gọi endpoint chính thức, dữ liệu có cấu trúc Nền tảng cung cấp quyền truy cập Sạch, ổn định hơn Quyền bị giới hạn hoặc gỡ Chỉ mô tả
+   Streaming Nhận và xử lý dữ liệu liên tục Cần gần thời gian thực Độ trễ thấp Cần hạ tầng, xử lý sự kiện trễ Chỉ mô tả
 
-| Backend | Truy vấn / đặc trưng | Giới hạn cần nêu |
-|---|---|---|
-| SQLite + FTS5 | Upsert theo `doc_id`, lọc ngày, đếm theo tháng, full-text search | FTS5 là chỉ mục văn bản; vẫn chịu giới hạn của một file database cục bộ |
-| Parquet | Lưu dữ liệu dạng cột, quét text/ngày/tháng bằng pandas/pyarrow | Không có full-text index; scan không tương đương FTS5 |
-| PostgreSQL, MongoDB, Elasticsearch, DuckDB | Chỉ mô tả lý thuyết | Không triển khai trong phạm vi rút gọn Phase 4 |
+Về Facebook: Meta đã ngừng hỗ trợ Groups API trong Graph API (từ v19, 01/2024), các thư viện scraper không chính thức không còn ổn định. Vì vậy hướng Playwright dùng phiên đăng nhập do chính người dùng tạo, chỉ nghe phản hồi trang tự tải, tốc độ thấp, và dừng ngay (mã thoát 3) khi gặp login wall/captcha/hạn chế. Không có mã nào nhằm né chặn. Chi tiết ở docs/ETHICS.md.
 
-`fbpipe bench-storage --n 1000 --iterations 20` tạo dữ liệu bootstrap có ID mới trong thư mục tạm, đo SQLite và Parquet rồi ghi `data/metrics/bench_storage.json`. Đây là bản sao benchmark có nhiễu dựa trên Silver, không phải 1.000 bài Facebook độc lập; cold first-pass cũng không bảo đảm đã xoá cache hệ điều hành.
+Trạng thái: parser GraphQL được kiểm thử bằng fixture tự dựng; chưa có mẫu phản hồi thật từ fbpipe probe nên key path của Facebook chưa được xác minh (TODO(real-sample)).
 
-**Nhận định — Trung tự viết:** Dựa trên số liệu latency, throughput và kích thước trong JSON metrics để giải thích vì sao SQLite/Parquet đủ dùng ở quy mô hiện tại và khi nào cần backend khác.
+3. Tiền xử lý
 
+Pipeline gồm các Transform độc lập (S0–S11): nhận diện ngôn ngữ, chuẩn hóa Unicode NFC, xóa nhiễu giao diện, che PII (URL/email/SĐT), xử lý emoji, rút gọn ký tự kéo dài, chuẩn hóa teencode, chữ thường, tách từ (underthesea), stopwords, stem/lemma, lọc chất lượng.
 
-## Nguồn dữ liệu & giới hạn
+Lập trường về stemming/lemmatization: tiếng Việt là ngôn ngữ đơn lập, không biến hình theo thì/số, nên stemming theo nghĩa tiếng Anh không áp dụng. Phần tương đương là chuẩn hóa dấu, teencode, tách từ và chữ thường. Stem/lemma chỉ áp dụng cho token tiếng Anh hợp lệ trong văn bản code-mixed; token tiếng Việt được giữ nguyên (identity).
 
-- **Nguồn trong demo**: SyntheticCollector tạo 200 bản ghi synthetic và gắn provenance là `source=synthetic`. Đây là dữ liệu kiểm thử, không phải bài đăng lấy từ Facebook.
-- Nếu thay bằng dữ liệu nhập, báo cáo phải ghi đúng N bản ghi theo `data/metrics/import.json` và số bản ghi hợp lệ/không hợp lệ trong `data/metrics/preprocess.json`; không gán nguồn Facebook khi provenance không chứng minh điều đó.
-- **Nhãn**: khi chưa có nhãn tay, label-eval dùng nhãn proxy theo luật (`proxy_labels=true`). Điểm số chỉ có ý nghĩa chẩn đoán, không phải ground truth.
-- **Crawl live chưa xác minh**: chưa có bằng chứng end-to-end từ phiên Facebook được phép và phản hồi thật đã ẩn danh; fixture tự dựng không chứng minh collector/parser hoạt động với dữ liệu live.
-- **Benchmark 1k**: bản benchmark tạo các dòng clone có nhiễu/ID mới từ Silver. 1.000 dòng benchmark không đồng nghĩa 1.000 bài độc lập.
+Funnel làm sạch (F15):
 
-## Hạn chế & hướng phát triển
+Bước Số bài
+Đầu vào (raw) 200
+Sau loại trùng (MinHash, ngưỡng 0,85) 53
+Sau lọc spam 53
+Sau lọc bài quá ngắn 53
+Giữ lại (keep) 53
 
-| Thành phần | Ý tưởng lý thuyết / trường hợp phù hợp | Lợi ích kỳ vọng | Hạn chế / trạng thái |
+147/200 bài bị đánh dấu trùng. Đây là đặc điểm của bộ synthetic (cố ý sinh repost), không nên đọc như tỷ lệ trùng của một nhóm thật.
+
+Ablation (3 cấu hình): A0_strip_only, A1_clean_and_tokenize, A2_full_s0_s11. Kết quả (kích thước từ vựng, độ dài token) xem data/metrics/preprocess.json và REPORT_generated.md. <!-- ĐIỀN: dán 3 dòng số từ preprocess.json -->
+
+Giới hạn đo lường: corpus tham chiếu NLTK English không có trong lần chạy, nên OOV tiếng Anh ghi null (không phải 0) và nhánh stem/lemma tiếng Anh bị tắt.
+
+4. Biểu diễn văn bản
+   Biểu diễn Cách làm Ưu Nhược
+   BoW CountVectorizer, n-gram (1,2) trên tokens_nostop Đơn giản, giải thích được Thưa, bỏ qua ngữ nghĩa và thứ tự
+   TF-IDF TfidfVectorizer(sublinear_tf=True), tf-idf(t,d) = tf(t,d) × idf(t) Hạ trọng số từ phổ biến Vẫn không biết đồng nghĩa
+   E5 multilingual-e5-small, input text_clean, chuẩn hóa L2 Bắt ngữ nghĩa, chịu code-mixed Cần model, chậm hơn trên CPU
+
+Trên 53–200 tài liệu synthetic, BoW và TF-IDF cùng có 148 chiều (ma trận thưa, lưu .npz). E5 là tùy chọn: thiếu thư viện hoặc không tải được model thì pipeline vẫn chạy với hai biểu diễn thưa, và metrics ghi trạng thái E5 bị bỏ qua.
+
+Đánh giá: chưa có nhãn tay nên label-eval dùng nhãn luật (proxy), mọi bảng/hình gắn cờ proxy_labels=true. Điểm macro-F1 theo nhãn proxy chỉ mang tính chẩn đoán vì nhãn do luật sinh nên mô hình học lại chính luật đó; không phải macro-F1 trên ground truth. <!-- ĐIỀN: macro-F1 BoW / TF-IDF / E5 từ label_eval.json -->
+
+Chọn biểu diễn: dữ liệu ít và cần giải thích → TF-IDF; cần tìm theo nghĩa hoặc code-mixed → E5. Vì dữ liệu hiện tại là synthetic, khuyến nghị này chưa được kiểm chứng bằng số đo trên dữ liệu thật.
+
+5. Lưu trữ
+   Bảng 4. So sánh lưu trữ
+   Backend Đặc trưng Trạng thái
+   SQLite + FTS5 Upsert theo doc_id, lọc ngày, đếm theo tháng, tìm toàn văn bằng chỉ mục đảo Đã triển khai, benchmark
+   Parquet Lưu cột, nén, quét bằng pandas/pyarrow, không có chỉ mục full-text Đã triển khai, benchmark
+   PostgreSQL SQL đầy đủ, tsvector, đa người dùng Chỉ mô tả, không triển khai
+   MongoDB Document lồng (post chứa comments), schema linh hoạt Chỉ mô tả, không triển khai
+   Elasticsearch Full-text, kNN, highlight; cần analyzer tiếng Việt Chỉ mô tả, không triển khai
+   DuckDB / HDFS / S3 + Iceberg Truy vấn SQL trực tiếp trên Parquet; lưu trữ phân tán Chỉ mô tả, không triển khai
+
+Benchmark (F14): 1.000 bản ghi nhân bản từ Silver (ID mới), 20 lần lặp, median, lần chạy warm.
+
+Tác vụ SQLite + FTS5 Parquet
+Ghi bulk ≈ 0,18 s ≈ 0,01 s
+Tìm từ khóa ≈ 0,001 s ≈ 0,008 s
+Lọc theo ngày ≈ 0,017 s ≈ 0,018 s
+Đếm theo tháng ≈ 0 ≈ 0,006 s
+
+Nhận xét: SQLite mạnh ở truy vấn điểm và tìm kiếm nhờ chỉ mục (FTS5, index ngày); Parquet mạnh ở ghi hàng loạt và phân tích theo cột. Vì vậy dự án dùng SQLite để tra cứu, Parquet để lưu trữ phân tích. Giới hạn: chỉ 1.000 bản ghi nhân bản, chênh lệch ở mức mili-giây nên chỉ mang tính gợi ý; ghi bulk của SQLite còn gồm dựng chỉ mục FTS5 nên phép so sánh không hoàn toàn công bằng; "Parquet scan" là quét trực tiếp, chưa có engine truy vấn. Ở quy mô lớn hơn (≥ hàng triệu bản ghi hoặc nhiều người ghi đồng thời) mới cần Postgres/Elasticsearch hoặc kho Big Data thật.
+
+6. Trực quan hóa
+
+Các hình sinh bằng fbpipe viz, lưu trong docs/figures/ (đã duyệt tay, không lộ tên/SĐT):
+
+Hình Nội dung Ghi chú đọc kết quả
+F01 Số bài theo ngày Phân bố gần đều là đặc điểm của synthetic, không phải xu hướng thật
+F03 Phân bố độ dài bài (token)
+F06 Top term: TF vs TF-IDF; sau khi sửa regex Unicode-aware, top token synthetic có người, thông_tin và chia_sẻ.
+F07 Word cloud Lọc PII/tên riêng bằng heuristic, không thay thế NER
+F09 Chọn k cho LDA Ghi đúng đại lượng được vẽ (c_v hay thay thế)
+F10 Chủ đề LDA sklearn LDA, số vòng lặp nhỏ
+F11 Bản đồ embedding 2D Ghi rõ UMAP/E5 hay PCA/TF-IDF thay thế
+F13 So sánh biểu diễn Dùng nhãn proxy (proxy_labels=true)
+F14 Benchmark lưu trữ Bản ghi nhân bản
+F15 Funnel làm sạch 200 → 53 7. Thách thức thực tế
+
+Bảng đầy đủ (15 mục) ở docs/CHALLENGES.md. Các thách thức nổi bật gặp trong dự án:
+
+Thách thức Biểu hiện trong dự án Giải pháp Rủi ro còn lại
+Truy cập Facebook Groups API bị gỡ; schema nội bộ không công bố; chưa có mẫu probe thật Adapter pattern; Import/Synthetic làm đường dự phòng; dừng khi bị chặn Chưa crawl được dữ liệu thật
+Pháp lý/đạo đức ToS hạn chế thu thập tự động; dữ liệu cá nhân Băm tác giả (HMAC), che PII, không commit dữ liệu thật, ETHICS.md Cần xác nhận quyền trước khi crawl
+Nhiễu và trùng lặp Repost, teencode, emoji MinHash dedup, chuẩn hóa teencode; funnel 200 → 53 Danh sách teencode còn nhỏ
+Tách từ tiếng Việt Regex tokenizer cũ tách trước ký tự ASCII rồi làm vỡ chữ có dấu Sửa regex Unicode-aware, thêm test hồi quy, đo tỷ lệ token một ký tự và cảnh báo khi vượt 10% Vẫn cần duyệt tay F06 trên dữ liệu được phép sử dụng
+Không có ground truth Chưa có nhãn tay Nhãn proxy gắn cờ rõ ràng; label-sample sẵn sàng cho nhãn tay Điểm macro-F1 chưa phản ánh chất lượng thật
+Đánh giá và quy mô Benchmark chỉ 1k bản ghi nhân bản Nêu rõ giới hạn Chưa biết nút thắt ở 100k+
+Tái lập Seed, secret, phiên bản thư viện seed=42, .env không commit, CI chạy test offline Chưa khóa phiên bản (lockfile) 8. Nhận định
+
+<!-- TRUNG: đọc lại, sửa theo đúng những gì bạn quan sát. Dưới đây là bản nháp trung thực, không thay thế nhận xét của bạn. -->
+
+Dữ liệu. Pipeline chạy trên 200 bài synthetic, nên các hình về thời gian (F01), trùng lặp (F15) và chủ đề (F10) chủ yếu phản ánh cách sinh dữ liệu chứ không phải một cộng đồng thật. Ví dụ F01 gần như phẳng vì synthetic sinh đều theo ngày.
+Tiền xử lý. Funnel 200 → 53 cho thấy bước loại trùng ảnh hưởng nhiều nhất; quan sát này cho thấy bước dedup hoạt động, còn tỷ lệ thật của nhóm thì chưa biết.
+Biểu diễn. BoW/TF-IDF cho vector thưa, giải thích được (148 chiều ở quy mô nhỏ). Chưa có nhãn tay nên chưa thể kết luận E5 hay TF-IDF tốt hơn; đây là điểm đồ án chưa trả lời được.
+Lưu trữ. SQLite thắng ở tìm kiếm nhờ FTS5, Parquet thắng ở ghi hàng loạt. Với quy mô hiện tại, chênh lệch rất nhỏ và không đủ để kết luận cho quy mô lớn.
+Bài học chính. Thiết kế adapter giúp bài vẫn hoàn chỉnh khi nguồn thật bị chặn; một lỗi tiền xử lý (nếu có) có thể làm sai mọi bước sau, nên cần kiểm thử xuyên suốt pipeline chứ không chỉ từng bước riêng lẻ. 9. Hạn chế & hướng phát triển
+
+Hạn chế đã biết:
+
+Chưa thu thập dữ liệu thật; auth, probe, crawl chưa được chạy end-to-end, parser chưa khớp schema thật.
+Nhãn đánh giá là proxy; chưa có macro-F1 trên nhãn tay.
+Phạm vi rút gọn (§0b của SPEC): không triển khai MongoDB, Elasticsearch, PostgreSQL, DuckDB, Streamlit, fastText tự huấn luyện, PhoBERT, NMF/BERTopic, dashboard; chỉ mô tả lý thuyết.
+Ablation 3 cấu hình thay vì 8; benchmark chỉ ở 1.000 bản ghi; có 1 notebook demo hoặc chưa có (ghi đúng thực tế).
+F07 dùng heuristic lọc tên riêng; F10 dùng LDA cấu hình nhẹ.
+
+Bảng so sánh lý thuyết (các thành phần dưới đây **không triển khai** trong phạm vi hiện tại):
+
+| Thành phần | Ý tưởng / trường hợp phù hợp | Đánh đổi chính | Trạng thái |
 |---|---|---|---|
-| MongoDB | NoSQL dạng document, hợp với schema lồng như bài + bình luận | Linh hoạt schema, mở rộng theo cụm tùy kiến trúc | **Không triển khai**; cần service, index và contract tests |
-| Elasticsearch | Inverted index/BM25 cho tìm kiếm toàn văn; có thể ghép vector search | Tìm kiếm và phân tích truy vấn mạnh hơn FTS5 ở nhu cầu phù hợp | **Không triển khai**; analyzer tiếng Việt cần thiết kế/đánh giá riêng |
-| Big Data (HDFS/S3 + Parquet/Delta/Iceberg) | Lưu trữ phân tán dạng cột cho dữ liệu lớn và xử lý batch | Nén, partition, scale-out và xử lý theo lô | **Không triển khai**; hiện tại chỉ dùng Parquet cục bộ, chưa có hệ thống phân tán |
-| fastText | Embedding subword huấn luyện từ corpus nội miền | Có thể tạo vector từ và giảm vấn đề từ ngoài từ vựng | **Không triển khai**; corpus synthetic/nhỏ không đủ để kết luận chất lượng |
-| PhoBERT | Transformer tiền huấn luyện cho tiếng Việt; thường cần đầu vào đã tách từ theo định dạng mô hình | Biểu diễn ngữ cảnh tiếng Việt | **Không triển khai**; chi phí tài nguyên và đánh giá nhãn tay chưa được thực hiện |
+| MongoDB | NoSQL document cho dữ liệu lồng như bài viết và bình luận | Schema linh hoạt; cần dịch vụ, index và vận hành riêng | Chỉ mô tả lý thuyết |
+| Elasticsearch | Inverted index/BM25 cho tìm kiếm toàn văn; có thể kết hợp vector search | Tìm kiếm mạnh hơn ở workload phù hợp; analyzer tiếng Việt cần thiết kế/đánh giá | Chỉ mô tả lý thuyết |
+| Big Data (HDFS/S3, Parquet/Delta/Iceberg) | Lưu trữ phân tán dạng cột và xử lý batch quy mô lớn | Scale-out/partition nhưng tăng độ phức tạp vận hành; hiện chỉ có Parquet cục bộ | Chỉ mô tả lý thuyết |
+| fastText | Embedding subword huấn luyện từ corpus nội miền | Có thể xử lý biến thể từ/OOV; cần corpus đủ lớn để học biểu diễn hữu ích | Chỉ mô tả lý thuyết |
+| PhoBERT | Transformer tiền huấn luyện dành cho tiếng Việt, dùng ngữ cảnh câu | Cần đúng quy cách tách từ, tài nguyên mô hình và đánh giá nhãn tay | Chỉ mô tả lý thuyết |
 
-Lộ trình hợp lý là: (1) kiểm tra thủ công F06 và tỷ lệ token một ký tự; (2) xây tập nhãn tay được phép sử dụng và báo macro-F1 trên nhãn thật tách biệt nhãn proxy; (3) xác minh collector bằng mẫu phản hồi live đã ẩn danh, nếu có quyền; (4) chỉ sau khi workload yêu cầu mới benchmark một backend tìm kiếm/NoSQL hoặc kiến trúc Big Data thực sự.
+Hướng phát triển: xin phép và thu thập dữ liệu thật (hoặc dữ liệu do giảng viên cấp) qua ImportCollector; gán nhãn tay 150–200 bài và tính Cohen's κ; benchmark ở 10k–100k; thêm engine truy vấn trên Parquet (DuckDB) và Elasticsearch với analyzer tiếng Việt; so sánh underthesea với pyvi; mở rộng ablation.
 
+10. Nguồn dữ liệu & giới hạn
 
-## Trạng thái triển khai
+- **Nguồn demo hiện tại:** 200 bài synthetic do SyntheticCollector tạo; đây là bằng chứng pipeline có thể chạy tái lập, không phải kết quả thu thập từ nhóm Facebook.
+- **Nếu có import:** báo đúng N bài từ import metrics và đối chiếu số bản ghi hợp lệ/không hợp lệ trong preprocess metrics; chỉ nêu nguồn mà provenance ghi nhận, không tự coi file nhập là crawl Facebook.
+- **Nhãn:** đến khi có nhãn tay đã kiểm tra, label-eval sử dụng nhãn yếu theo luật với proxy_labels=true. Macro-F1 trên nhãn proxy chỉ mang tính chẩn đoán.
+- **Crawl live chưa xác minh:** chưa có chuỗi end-to-end được kiểm chứng với phiên truy cập được phép và mẫu phản hồi Facebook thật đã ẩn danh; fixture tự dựng không đủ để xác nhận parser.
+- **Benchmark 1k là bản clone:** các bản ghi được nhân bản có nhiễu/ID mới từ Silver, không tương đương 1.000 bài đăng độc lập.
 
-- Import/Synthetic: chạy offline; Playwright/GraphQL chưa được xác minh bằng mẫu phản hồi Facebook thật.
-- Preprocess S0–S11: đã có mã, test hồi quy tiếng Việt và metric `token_quality` (tỷ lệ token một ký tự; cảnh báo khi vượt 10%).
-- Represent/label/store: BoW/TF-IDF, nhãn proxy, SQLite/FTS5 và Parquet có mã; E5 là tùy chọn và bị bỏ qua trong demo offline.
-- F01/F03/F06/F07/F09/F10/F11/F13/F14/F15 được sinh bởi `fbpipe demo`. Cần duyệt hình vừa sinh và top 15 F06; hình được tạo trên runner CI không tự cập nhật các PNG đã commit trong repository.
-
-## Nhận định tổng kết
-
-<!-- TRUNG VIẾT: dựa trên số liệu thật được phép sử dụng; không đưa dữ liệu synthetic/benchmark clone thành kết quả từ Facebook. -->
+Tài liệu tham khảo
+Meta (23/01/2024), Introducing Facebook Graph API v19.0 and Marketing API v19.0.
+TechCrunch (05/02/2024), Meta cuts off third-party access to Facebook Groups.
+intfloat/multilingual-e5-small (Hugging Face); underthesea; datasketch; scikit-learn; NLTK; SQLite FTS5; Apache Parquet.
+Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân (kiểm tra văn bản hiện hành trước khi trích).
