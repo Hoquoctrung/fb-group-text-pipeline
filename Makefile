@@ -3,7 +3,7 @@
 setup:
 	python3.11 -m venv .venv
 	. .venv/bin/activate && python -m pip install --upgrade pip
-	. .venv/bin/activate && pip install -e ".[dev,crawl]"
+	. .venv/bin/activate && pip install -e ".[dev,crawl,nlp,viz]"
 
 test:
 	pytest -m "not integration and not slow" -q
@@ -23,5 +23,4 @@ check:
 	pytest -m "not integration and not slow" -q
 
 demo:
-	fbpipe synth --n 200
-	fbpipe validate data/bronze/synthetic.jsonl
+	fbpipe demo

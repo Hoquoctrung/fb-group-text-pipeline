@@ -1,109 +1,87 @@
 # FB Group Text Pipeline
 
-Pipeline học thuật để thu thập **dữ liệu được phép sử dụng**, tiền xử lý văn bản, so sánh biểu diễn và lưu trữ bằng SQLite/Parquet. Các kết quả phải ghi rõ nguồn; dữ liệu synthetic và benchmark clone không được mô tả như dữ liệu Facebook thật.
+[![CI](https://github.com/Hoquoctrung/fb-group-text-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Hoquoctrung/fb-group-text-pipeline/actions/workflows/ci.yml)
 
-## Sơ đồ pipeline
+Pipeline học thuật xử lý văn bản nhóm Facebook theo các bước thu thập được phép → tiền xử lý → biểu diễn → lưu trữ → phân tích.
+Demo mặc định tạo 200 bài **synthetic**, chạy offline và bỏ qua model E5.
+Kết quả synthetic, nhãn proxy và benchmark bản clone luôn được ghi rõ; crawl Facebook live chưa được xác minh.
 
-```mermaid
+## Kiến trúc
+
+~~~mermaid
 flowchart TD
-    A[Import / Synthetic / nguồn được phép] --> B[Bronze JSONL]
-    B --> C[fbpipe preprocess: S0–S11]
-    C --> D[Silver Parquet + preprocess metrics]
-    D --> E[fbpipe analyze]
-    D --> F[BoW / TF-IDF / E5 tùy chọn]
-    D --> G[SQLite FTS5 + Parquet store]
-    E --> H[fbpipe viz: matplotlib]
-    F --> H
-    G --> H
-    H --> I[docs/figures]
-    E --> J[fbpipe report]
-    F --> J
-    G --> J
+    A["Import hợp lệ / Synthetic"] --> B["Bronze JSONL"]
+    B --> C["S0–S11: preprocess"]
+    C --> D["Silver Parquet + metrics"]
+    D --> E["BoW / TF-IDF"]
+    D -. tùy chọn .-> F["E5 (không chạy trong demo)"]
+    D --> G["SQLite + FTS5"]
+    D --> H["Parquet store"]
+    E --> I["Analyze + F06"]
+    F --> I
+    G --> J["Viz + report"]
+    H --> J
     I --> J
-    J --> K[docs/REPORT_generated.md]
-```
+    J --> K["docs/REPORT_generated.md"]
+~~~
+
+**Ghi chú phạm vi:** MongoDB, Elasticsearch và Streamlit **không triển khai**.
 
 ## Quickstart
 
-Yêu cầu Python 3.11+. Tại thư mục dự án:
+Yêu cầu Python 3.11+. Từ thư mục repo, chạy 5 lệnh:
 
-```bash
+~~~bash
 python3.11 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev,crawl,nlp,viz]"
-fbpipe --help
+pip install -e ".[dev,nlp,embed,viz]"
+cp .env.example .env
+make demo
+~~~
 
-# Dữ liệu demo tổng hợp; không cần đăng nhập Facebook
-fbpipe synth --n 200
-fbpipe validate data/bronze/synthetic.jsonl
-fbpipe preprocess --force
-fbpipe analyze
-fbpipe represent --skip-e5
-fbpipe label-sample --n 200
-# Có thể nhập nhãn tay vào data/labels/to_label.csv trước khi đánh giá.
-# Nếu chưa có nhãn tay, label-eval phải gắn cờ proxy_labels=true.
-fbpipe label-eval
-fbpipe store
-fbpipe bench-storage --n 1000 --iterations 20
-fbpipe viz
-fbpipe report
-```
+*make demo* gọi *fbpipe demo*: tạo 200 bản ghi synthetic trong thư mục riêng *data/demo*, rồi chạy *preprocess --force* → *represent --skip-e5* → *label-eval* → *store* → *analyze* → *viz* → *report*. Demo chỉ xóa/tạo lại *data/demo* nên không xóa file import khác hay nhãn của bạn ở các thư mục khác. Metrics nằm tại *data/demo/metrics/*. Lệnh in thời gian từng bước, tổng thời gian và 15 token TF/TF-IDF của F06. Mục tiêu là hoàn thành dưới 90 giây; nếu vượt giới hạn, lệnh báo lỗi.
 
-Các đầu ra quan trọng:
+## Hình đầu ra mẫu
 
-- Silver và metrics tiền xử lý: `data/silver/documents.parquet`, `data/metrics/preprocess.json`.
-- Metrics phân tích và biểu diễn: `data/metrics/analyze.json`, `data/metrics/represent.json`, artifact ở `data/gold/`.
-- SQLite + FTS5 và Parquet store: `data/fbpipe.db`, `data/store/documents.parquet`.
-- Hình matplotlib: `docs/figures/`.
-- Báo cáo sinh tự động: `docs/REPORT_generated.md`.
+Các hình sau được sinh từ dữ liệu trong Silver; hãy chạy lại demo sau mỗi thay đổi preprocessing và duyệt hình trước khi chia sẻ.
 
-### E5 tùy chọn
+![F01 — số bài theo ngày](docs/figures/F01_daily_posts.png)
 
-```bash
-python -m pip install -e ".[embed]"
-fbpipe represent --force
-```
+![F06 — so sánh top terms TF và TF-IDF](docs/figures/F06_top_terms_tf_tfidf.png)
 
-Lần đầu chạy có thể cần mạng để tải `intfloat/multilingual-e5-small`. Nếu thiếu dependency hoặc tải model lỗi, BoW/TF-IDF vẫn là đầu ra cốt lõi; E5 có thể bị bỏ qua kèm cảnh báo.
+![F14 — benchmark SQLite/Parquet](docs/figures/F14_storage_benchmark.png)
 
-### Sinh lại hình và báo cáo
+![F15 — funnel tiền xử lý](docs/figures/F15_preprocess_funnel.png)
 
-```bash
-fbpipe analyze
-fbpipe viz
-fbpipe report
-```
+## 7 mục tiêu → file và báo cáo (SPEC §1)
 
-`fbpipe report` tổng hợp JSON có trong `data/metrics/` và các hình hiện có trong `docs/figures/`. Lệnh chỉ ghi `docs/REPORT_generated.md`, không ghi đè `docs/REPORT.md`. Phần **Nhận định** trong báo cáo tự sinh vẫn là placeholder để người nghiên cứu hoàn thiện sau khi duyệt dữ liệu và hình.
+| # | Mục tiêu | File / bằng chứng | Trạng thái hiện thực |
+|---:|---|---|---|
+| 1 | Quy trình các giai đoạn | src/fbpipe/cli.py, data/metrics/*.json, sơ đồ kiến trúc | **Đầy đủ trong phạm vi rút gọn** |
+| 2 | File import, scraping, crawling, API, streaming | src/fbpipe/collect/, docs/REPORT.md §2 | **Một phần**: import/synthetic đã triển khai; crawl chưa xác minh live; scraping/API/streaming mô tả lý thuyết |
+| 3 | Làm sạch, chuẩn hóa, tokenization, stopwords, morphology | src/fbpipe/preprocess/, tests/test_preprocess.py, preprocess metrics | **Đầy đủ trong phạm vi rút gọn**; stemming/lemma chỉ cho tiếng Anh |
+| 4 | BoW, TF-IDF, embedding và đánh giá | src/fbpipe/represent/, data/metrics/represent.json, F06/F13 | **Một phần**: BoW/TF-IDF triển khai; E5 tùy chọn; fastText/PhoBERT chỉ mô tả lý thuyết |
+| 5 | Lưu trữ và so sánh backend | src/fbpipe/storage/, data/metrics/store.json, data/metrics/bench_storage.json, F14 | **Một phần**: SQLite/FTS5 + Parquet triển khai; MongoDB/Elasticsearch/Big Data chỉ mô tả lý thuyết |
+| 6 | Phân tích và trực quan hóa | src/fbpipe/analysis.py, src/fbpipe/viz.py, F01/F03/F06/F07/F09/F10/F11/F13/F14/F15 | **Một phần**: 10 hình trong phạm vi rút gọn; không có dashboard Streamlit |
+| 7 | Thách thức thực tế và đạo đức | docs/CHALLENGES.md, docs/ETHICS.md, docs/REPORT.md | **Một phần**: rủi ro và cách xử lý được mô tả; bằng chứng crawl live chưa có |
 
-## Quy tắc an toàn và quyền riêng tư
+## Cảnh báo đạo đức và quyền riêng tư
 
-- Chỉ thu thập dữ liệu khi có quyền/cho phép phù hợp; đọc `docs/ETHICS.md` trước khi dùng collector.
-- Không vượt CAPTCHA, login wall, checkpoint hay cơ chế kiểm soát truy cập. Nếu bị chặn, dừng.
-- Không commit `.env`, `.auth/`, dữ liệu thật, metrics có thể chứa thông tin nhạy cảm hoặc response chưa ẩn danh.
-- Parser Facebook chưa được xác minh bằng mẫu response GraphQL thật đã ẩn danh; fixture tự tạo không chứng minh parser hoạt động với Facebook.
-- `source` được theo dõi qua `synthetic`, `import`, `playwright` hoặc `unknown`. Silver cũ thiếu cột này được đọc với `source="unknown"`; chạy lại preprocessing để tái tạo Silver có provenance nếu cần.
+- Chỉ xử lý dữ liệu có quyền sử dụng phù hợp; đọc [docs/ETHICS.md](docs/ETHICS.md) trước khi thu thập.
+- Không vượt login wall, CAPTCHA, checkpoint hoặc cơ chế hạn chế truy cập. Nếu bị chặn, dừng.
+- Không commit .env, .auth/, dữ liệu thật, cookie, token hoặc metrics có thông tin nhạy cảm.
+- Phân biệt dữ liệu synthetic, file import và dữ liệu crawl; nhãn proxy không phải ground truth.
 
-## Trạng thái trung thực
+## Giới hạn đã biết
 
-- **Đã quan sát trong lần chạy Phase 2:** 200 bản ghi synthetic được preprocess, 0 bản ghi không hợp lệ; 53 bản ghi còn lại sau dedup và 147 bản ghi được đánh dấu trùng. Lần chạy đó ghi `ratio_code_mixed=0.94`; đây là kết quả synthetic, không phải kết quả về nhóm Facebook thật.
-- **Represent/Store đã chạy trên máy phát triển:** BoW 148 chiều, TF-IDF 148 chiều, E5 báo `available`; SQLite và Parquet lưu 200 dòng; benchmark chạy trên 1.000 bản ghi clone với 20 iterations. Bản clone không đại diện 1.000 bài độc lập.
-- **Kiểm thử Phase 3–4 đã báo cáo:** 61 tests passed, Ruff/pre-commit pass và Pylance Problems = 0 ở lần kiểm tra được cung cấp. Kết quả đó không xác nhận các thay đổi Phase 5–6 hiện tại.
-- **Phase 5–6:** có code cho `analyze`, các hình trong phạm vi rút gọn và `report`; hãy chạy trên máy phát triển và xem file đầu ra trước khi đánh dấu hoàn tất.
-- **Chưa xác minh live:** đăng nhập, probe, crawl và resume bằng phiên Facebook được phép; nguồn không có metadata phải được xem là `unknown`, không tự coi là dữ liệu thật.
-- **Nhãn:** cho đến khi có nhãn tay được kiểm tra, mọi kết quả `proxy_labels=true` chỉ là chẩn đoán theo luật, không phải ground truth.
-- **Ngoài phạm vi rút gọn:** PostgreSQL, MongoDB, Elasticsearch, DuckDB, Docker, Streamlit, NMF/BERTopic và capture–recapture. F09/F11 cũng chưa nằm trong lượt viz rút gọn hiện tại.
+- **Nguồn demo:** 200 bài synthetic; crawl Facebook live và schema GraphQL chưa xác minh bằng phản hồi thật.
+- **Token tiếng Việt:** regex tokenization đã được sửa để giữ Unicode; vẫn cần duyệt F06 và tỷ lệ token một ký tự trên dữ liệu được phép sử dụng.
+- **Nhãn:** khi chưa có nhãn tay, label-eval dùng luật proxy và gắn proxy_labels=true.
+- **Benchmark 1k:** các dòng là bản clone có nhiễu, không phải 1.000 bài độc lập.
+- **Không triển khai, chỉ mô tả lý thuyết:** MongoDB, Elasticsearch, HDFS/S3 và kiến trúc Big Data, fastText tự huấn luyện, PhoBERT. Streamlit cũng không nằm trong phạm vi demo.
 
-## Kiểm tra trước commit
+Xem [báo cáo thủ công](docs/REPORT.md), [báo cáo sinh tự động](docs/REPORT_generated.md), [SPEC](docs/SPEC.md) và [thách thức](docs/CHALLENGES.md). Phần **Nhận định** trong báo cáo là chỗ để Trung tự viết sau khi xem kết quả.
 
-```bash
-ruff check src tests
-ruff format --check src tests
-pre-commit run --all-files
-pytest -q
+## English summary
 
-git diff --check
-git status --short
-```
-
-Trước khi commit/push, xác nhận không có `.env`, `.auth/`, dữ liệu dưới `data/` hoặc response chưa duyệt trong danh sách staged.
+An offline-first academic pipeline for authorized group-text data. The demo generates 200 synthetic posts and runs preprocessing, BoW/TF-IDF representation, proxy-label evaluation, SQLite/Parquet storage, visualization, and reporting without downloading E5. Live Facebook collection is unverified; theoretical backends and models are explicitly marked as not implemented.

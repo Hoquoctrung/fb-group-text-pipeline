@@ -111,7 +111,7 @@ Các hình sinh bằng fbpipe viz, lưu trong docs/figures/ (đã duyệt tay, k
 Hình Nội dung Ghi chú đọc kết quả
 F01 Số bài theo ngày Phân bố gần đều là đặc điểm của synthetic, không phải xu hướng thật
 F03 Phân bố độ dài bài (token)
-F06 Top term: TF vs TF-IDF <!-- KIỂM TRA: nếu còn token vỡ ("th", "ng", "ười") thì ghi rõ lỗi tách từ -->
+F06 Top term: TF vs TF-IDF; sau khi sửa regex Unicode-aware, top token synthetic có người, thông_tin và chia_sẻ.
 F07 Word cloud Lọc PII/tên riêng bằng heuristic, không thay thế NER
 F09 Chọn k cho LDA Ghi đúng đại lượng được vẽ (c_v hay thay thế)
 F10 Chủ đề LDA sklearn LDA, số vòng lặp nhỏ
@@ -126,7 +126,7 @@ Thách thức Biểu hiện trong dự án Giải pháp Rủi ro còn lại
 Truy cập Facebook Groups API bị gỡ; schema nội bộ không công bố; chưa có mẫu probe thật Adapter pattern; Import/Synthetic làm đường dự phòng; dừng khi bị chặn Chưa crawl được dữ liệu thật
 Pháp lý/đạo đức ToS hạn chế thu thập tự động; dữ liệu cá nhân Băm tác giả (HMAC), che PII, không commit dữ liệu thật, ETHICS.md Cần xác nhận quyền trước khi crawl
 Nhiễu và trùng lặp Repost, teencode, emoji MinHash dedup, chuẩn hóa teencode; funnel 200 → 53 Danh sách teencode còn nhỏ
-Tách từ tiếng Việt Lỗi tách từ lan sang mọi biểu diễn phía sau Kiểm thử bảng input/output, theo dõi tỷ lệ token độ dài 1 <!-- CẬP NHẬT: đã sửa hay chưa -->
+Tách từ tiếng Việt Regex tokenizer cũ tách trước ký tự ASCII rồi làm vỡ chữ có dấu Sửa regex Unicode-aware, thêm test hồi quy, đo tỷ lệ token một ký tự và cảnh báo khi vượt 10% Vẫn cần duyệt tay F06 trên dữ liệu được phép sử dụng
 Không có ground truth Chưa có nhãn tay Nhãn proxy gắn cờ rõ ràng; label-sample sẵn sàng cho nhãn tay Điểm macro-F1 chưa phản ánh chất lượng thật
 Đánh giá và quy mô Benchmark chỉ 1k bản ghi nhân bản Nêu rõ giới hạn Chưa biết nút thắt ở 100k+
 Tái lập Seed, secret, phiên bản thư viện seed=42, .env không commit, CI chạy test offline Chưa khóa phiên bản (lockfile) 8. Nhận định
@@ -137,7 +137,7 @@ Dữ liệu. Pipeline chạy trên 200 bài synthetic, nên các hình về th�
 Tiền xử lý. Funnel 200 → 53 cho thấy bước loại trùng ảnh hưởng nhiều nhất; quan sát này cho thấy bước dedup hoạt động, còn tỷ lệ thật của nhóm thì chưa biết.
 Biểu diễn. BoW/TF-IDF cho vector thưa, giải thích được (148 chiều ở quy mô nhỏ). Chưa có nhãn tay nên chưa thể kết luận E5 hay TF-IDF tốt hơn; đây là điểm đồ án chưa trả lời được.
 Lưu trữ. SQLite thắng ở tìm kiếm nhờ FTS5, Parquet thắng ở ghi hàng loạt. Với quy mô hiện tại, chênh lệch rất nhỏ và không đủ để kết luận cho quy mô lớn.
-Bài học chính. Thiết kế adapter giúp bài vẫn hoàn chỉnh khi nguồn thật bị chặn; một lỗi tiền xử lý (nếu có) có thể làm sai mọi bước sau, nên cần kiểm thử xuyên suốt pipeline chứ không chỉ từng bước riêng lẻ. 9. Hạn chế và hướng phát triển
+Bài học chính. Thiết kế adapter giúp bài vẫn hoàn chỉnh khi nguồn thật bị chặn; một lỗi tiền xử lý (nếu có) có thể làm sai mọi bước sau, nên cần kiểm thử xuyên suốt pipeline chứ không chỉ từng bước riêng lẻ. 9. Hạn chế & hướng phát triển
 
 Hạn chế đã biết:
 
@@ -147,7 +147,25 @@ Phạm vi rút gọn (§0b của SPEC): không triển khai MongoDB, Elasticsear
 Ablation 3 cấu hình thay vì 8; benchmark chỉ ở 1.000 bản ghi; có 1 notebook demo hoặc chưa có (ghi đúng thực tế).
 F07 dùng heuristic lọc tên riêng; F10 dùng LDA cấu hình nhẹ.
 
+Bảng so sánh lý thuyết (các thành phần dưới đây **không triển khai** trong phạm vi hiện tại):
+
+| Thành phần | Ý tưởng / trường hợp phù hợp | Đánh đổi chính | Trạng thái |
+|---|---|---|---|
+| MongoDB | NoSQL document cho dữ liệu lồng như bài viết và bình luận | Schema linh hoạt; cần dịch vụ, index và vận hành riêng | Chỉ mô tả lý thuyết |
+| Elasticsearch | Inverted index/BM25 cho tìm kiếm toàn văn; có thể kết hợp vector search | Tìm kiếm mạnh hơn ở workload phù hợp; analyzer tiếng Việt cần thiết kế/đánh giá | Chỉ mô tả lý thuyết |
+| Big Data (HDFS/S3, Parquet/Delta/Iceberg) | Lưu trữ phân tán dạng cột và xử lý batch quy mô lớn | Scale-out/partition nhưng tăng độ phức tạp vận hành; hiện chỉ có Parquet cục bộ | Chỉ mô tả lý thuyết |
+| fastText | Embedding subword huấn luyện từ corpus nội miền | Có thể xử lý biến thể từ/OOV; cần corpus đủ lớn để học biểu diễn hữu ích | Chỉ mô tả lý thuyết |
+| PhoBERT | Transformer tiền huấn luyện dành cho tiếng Việt, dùng ngữ cảnh câu | Cần đúng quy cách tách từ, tài nguyên mô hình và đánh giá nhãn tay | Chỉ mô tả lý thuyết |
+
 Hướng phát triển: xin phép và thu thập dữ liệu thật (hoặc dữ liệu do giảng viên cấp) qua ImportCollector; gán nhãn tay 150–200 bài và tính Cohen's κ; benchmark ở 10k–100k; thêm engine truy vấn trên Parquet (DuckDB) và Elasticsearch với analyzer tiếng Việt; so sánh underthesea với pyvi; mở rộng ablation.
+
+10. Nguồn dữ liệu & giới hạn
+
+- **Nguồn demo hiện tại:** 200 bài synthetic do SyntheticCollector tạo; đây là bằng chứng pipeline có thể chạy tái lập, không phải kết quả thu thập từ nhóm Facebook.
+- **Nếu có import:** báo đúng N bài từ import metrics và đối chiếu số bản ghi hợp lệ/không hợp lệ trong preprocess metrics; chỉ nêu nguồn mà provenance ghi nhận, không tự coi file nhập là crawl Facebook.
+- **Nhãn:** đến khi có nhãn tay đã kiểm tra, label-eval sử dụng nhãn yếu theo luật với proxy_labels=true. Macro-F1 trên nhãn proxy chỉ mang tính chẩn đoán.
+- **Crawl live chưa xác minh:** chưa có chuỗi end-to-end được kiểm chứng với phiên truy cập được phép và mẫu phản hồi Facebook thật đã ẩn danh; fixture tự dựng không đủ để xác nhận parser.
+- **Benchmark 1k là bản clone:** các bản ghi được nhân bản có nhiễu/ID mới từ Silver, không tương đương 1.000 bài đăng độc lập.
 
 Tài liệu tham khảo
 Meta (23/01/2024), Introducing Facebook Graph API v19.0 and Marketing API v19.0.

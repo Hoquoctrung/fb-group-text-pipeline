@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import time
 from collections import Counter
@@ -21,6 +22,8 @@ from fbpipe.preprocess.steps import (
 from fbpipe.privacy import scrub_pii
 from fbpipe.schema import RawPost
 from fbpipe.source import normalize_source
+
+logger = logging.getLogger(__name__)
 
 OUTPUT_COLUMNS = [
     "doc_id",
@@ -70,6 +73,33 @@ class PreprocessResult:
     output_path: Path
     metrics_path: Path
     skipped_as_up_to_date: bool = False
+
+
+def _token_quality_metrics(docs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Measure one-character tokens and flag suspiciously high ratios."""
+    tokens = [
+        str(token) for doc in docs for token in (doc.get("tokens") or []) if str(token)
+    ]
+    total_tokens = len(tokens)
+    single_character_tokens = sum(len(token) == 1 for token in tokens)
+    raw_ratio = single_character_tokens / total_tokens if total_tokens else 0.0
+    ratio = round(raw_ratio, 6)
+    quality_warnings: list[str] = []
+    threshold = 0.10
+    if raw_ratio > threshold:
+        message = (
+            f"Single-character token ratio is {ratio:.1%}, above the 10% threshold. "
+            "Review Unicode-aware tokenization."
+        )
+        quality_warnings.append(message)
+        logger.warning("Text quality warning: %s", message)
+    return {
+        "total_tokens": total_tokens,
+        "single_character_tokens": single_character_tokens,
+        "single_character_token_ratio": ratio,
+        "warning_threshold_ratio": threshold,
+        "warnings": quality_warnings,
+    }
 
 
 def _read_bronze(input_files: list[Path]) -> tuple[list[dict[str, Any]], int, int]:
@@ -493,6 +523,7 @@ def preprocess_corpus(
         ),
         "oov_reference_available": vocabulary_available,
         "length_distribution_tokens": length_distribution,
+        "token_quality": _token_quality_metrics(docs),
         "domain_stopword_candidates": domain_candidates,
         "step_seconds": {key: round(value, 6) for key, value in step_seconds.items()},
         "ablation_seconds": round(ablation_seconds, 6),

@@ -19,7 +19,7 @@ _PHONE_RE = re.compile(r"(?<!\w)(?:\+84|0084|0)(?:[ .-]?\d){8,10}(?!\w)")
 _MENTION_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_.]+")
 _HASHTAG_RE = re.compile(r"(?<!\w)#([\w]+)", re.UNICODE)
 _TOKEN_RE = re.compile(
-    r"<[a-z_]+>|[A-Za-z]+(?:['’][A-Za-z]+)?|[^\W\d_]+(?:_[^\W\d_]+)*|\d+(?:[.,]\d+)*",
+    r"<[a-z_]+>|[^\W\d_]+(?:[_'’][^\W\d_]+)*|\d+(?:[.,]\d+)*",
     re.IGNORECASE | re.UNICODE,
 )
 _EMOJI_BASE_RE = re.compile(

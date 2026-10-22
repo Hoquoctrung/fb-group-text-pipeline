@@ -29,6 +29,7 @@ _METRIC_KEYS = (
     "source_column_present",
     "source_counts",
     "length_distribution_tokens",
+    "token_quality",
     "bow_dimensions",
     "tfidf_dimensions",
     "vocabulary_size",
