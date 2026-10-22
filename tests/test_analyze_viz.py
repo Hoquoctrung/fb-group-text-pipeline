@@ -107,6 +107,32 @@ def test_analysis_normalizes_blank_and_playwright_source(tmp_path: Path) -> None
     ]
 
 
+def test_analysis_top_terms_use_tokens_nostop(tmp_path: Path) -> None:
+    """Ensure analyze/F06 term metrics do not reintroduce stopwords from raw tokens."""
+    silver = tmp_path / "silver.parquet"
+    pd.DataFrame(
+        [
+            {
+                "doc_id": "p-stopwords",
+                "created_at": "2026-01-01T10:00:00Z",
+                "tokens": ["về", "không", "nào", "biết", "mình", "người", "chia_sẻ"],
+                "tokens_nostop": ["người", "chia_sẻ"],
+                "text_clean": "về không nào biết mình người chia_sẻ",
+                "source": "synthetic",
+            }
+        ]
+    ).to_parquet(silver, index=False)
+
+    result = analyze_corpus(input_path=silver, data_dir=tmp_path / "data")
+    stopwords = {"về", "không", "nào", "biết", "mình"}
+    top_tf = result["top_tf_terms"]
+    top_tfidf = result["top_tfidf_terms"]
+
+    assert {row["term"] for row in top_tf} == {"người", "chia_sẻ"}
+    assert stopwords.isdisjoint(row["term"] for row in top_tf)
+    assert stopwords.isdisjoint(row["term"] for row in top_tfidf)
+
+
 def test_viz_creates_only_requested_fast_figures(tmp_path: Path) -> None:
     pytest.importorskip("matplotlib")
     from fbpipe.viz import FIGURE_NAMES, generate_figures
