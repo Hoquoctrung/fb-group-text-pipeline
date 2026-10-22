@@ -93,7 +93,19 @@ STEP_CASES: list[tuple[str, dict[str, Any], str, Any]] = [
     ),
     (
         "S9",
-        {"tokens": ["the", "piano", "và", "âm_nhạc"]},
+        {
+            "tokens": [
+                "the",
+                "piano",
+                "và",
+                "âm_nhạc",
+                "về",
+                "không",
+                "nào",
+                "biết",
+                "mình",
+            ]
+        },
         "tokens_nostop",
         ["piano", "âm_nhạc"],
     ),
